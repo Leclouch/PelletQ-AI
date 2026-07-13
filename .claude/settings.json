@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl -d Ubuntu -- bash -lc 'export PATH=\"$HOME/.nvm/versions/node/v24.17.0/bin:$PATH\"; cd ~/projects/PKM/PelletQ-AI; pnpm exec tsc --noEmit 2>&1 | head -20; echo \"EXIT:${PIPESTATUS[0]}\"')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'cd ~/projects/PKM/PelletQ-AI; find node_modules/.pnpm -path \"*prisma*/config*\" -name \"*.d.ts\" 2>/dev/null | head; echo \"===\"; f=$\\(find node_modules/prisma -name \"config.d.ts\" 2>/dev/null | head -1\\); echo \"FILE:$f\"; grep -nE \"type PrismaConfig|adapter|migrate|migrations|datasource|schema|interface PrismaConfig\" \"$f\" 2>/dev/null | head -40')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'cd ~/projects/PKM/PelletQ-AI; f=\"node_modules/.pnpm/@prisma+config@7.8.0/node_modules/@prisma/config/dist/index.d.ts\"; grep -nE \"adapter|migrate|migrations|datasource|schema|seed|PrismaConfig\" \"$f\" | head -60')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'export PATH=\"$HOME/.nvm/versions/node/v24.17.0/bin:$PATH\"; cd ~/projects/PKM/PelletQ-AI; echo \"=== tsc ===\"; pnpm exec tsc --noEmit 2>&1 | head -20; echo \"TSC_EXIT:${PIPESTATUS[0]}\"; echo \"=== prisma validate ===\"; pnpm exec prisma validate 2>&1 | tail -8; echo \"=== prisma migrate status \\(needs DB\\) ===\"; pnpm exec prisma migrate status 2>&1 | tail -12')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'export PATH=\"$HOME/.nvm/versions/node/v24.17.0/bin:$PATH\"; cd ~/projects/PKM/PelletQ-AI; docker compose up -d 2>&1 | tail -15; echo \"=== ps ===\"; docker compose ps 2>&1 | tail -10')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'echo \"=== port 5432 in WSL ===\"; \\(exec 3<>/dev/tcp/localhost/5432\\) 2>&1 && echo \"OPEN on localhost\" || echo \"closed localhost\"; \\(exec 3<>/dev/tcp/127.0.0.1/5432\\) 2>&1 && echo \"OPEN 127.0.0.1\" || echo \"closed 127.0.0.1\"; echo \"=== docker.exe? ===\"; which docker.exe 2>&1; docker.exe ps 2>&1 | head -5')",
+      "Bash(cmd.exe /c start \"\" \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(wsl -d Ubuntu -- bash -lc 'export PATH=\"$HOME/.nvm/versions/node/v24.17.0/bin:$PATH\"; cd ~/projects/PKM/PelletQ-AI; pnpm exec tsx _q.ts 2>&1 | tail -60; rm -f _q.ts')",
+      "Bash(wsl -d Ubuntu -- bash -lc 'bash /tmp/run5.sh; rm -f /tmp/run5.sh')"
+    ],
+    "additionalDirectories": [
+      "\\\\wsl.localhost\\Ubuntu\\tmp"
+    ]
+  }
+}

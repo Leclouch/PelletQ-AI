@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+  background: #E7E1D3;
+  -webkit-font-smoothing: antialiased;
+  color: #1C2E27;
+}
+button { font-family: inherit; border: none; background: none; }
+input, select { font-family: inherit; }
+input:focus, select:focus { outline: none; border-color: #1A8A5E !important; }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%237C8A82' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 38px !important;
+}
+::-webkit-scrollbar { width: 0; height: 0; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeUp { from { transform: translateY(9px); } to { transform: none; } }
+@keyframes pop { from { transform: scale(.975); } to { transform: none; } }

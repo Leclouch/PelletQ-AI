@@ -1,0 +1,394 @@
+// ===================================================================
+// PelletQ-AI — Database Schema (Prisma + PostgreSQL)
+// ===================================================================
+// Skema ini mengikuti struktur variabel di dokumen "Rancangan Awal
+// Rule-Based System": Input User, Database (Bahan Baku & SNI),
+// dan Output (Formulasi, Parameter Mesin, Validasi SNI, Peringatan).
+// ===================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===================================================================
+// ENUMS
+// ===================================================================
+
+enum Role {
+  ADMIN // tim PKM / pengelola sistem
+  MITRA // mitra budidaya, operator mesin
+}
+
+enum FishPhase {
+  BENIH
+  GROWER
+  FINISHER
+  INDUK
+}
+
+enum PelletType {
+  TERAPUNG
+  TENGGELAM
+}
+
+enum PelletLength {
+  PENDEK
+  SEDANG
+  PANJANG
+}
+
+enum IngredientCondition {
+  KERING
+  AGAK_LEMBAP
+  BASAH
+}
+
+enum IngredientForm {
+  HALUS
+  SEDANG
+  KASAR
+}
+
+enum IngredientCharacter {
+  MUDAH_MENGIKAT
+  SULIT_MENGIKAT
+  BERMINYAK
+  NETRAL
+}
+
+enum FormulationPriority {
+  TERMURAH
+  SEIMBANG
+  NUTRISI_TINGGI
+}
+
+enum OperationMode {
+  OTOMATIS
+  MANUAL
+}
+
+enum PowerSource {
+  PLN
+  BATERAI
+  HYBRID
+}
+
+enum SniStatus {
+  SESUAI
+  BELUM_SESUAI
+}
+
+enum WarningType {
+  BAHAN_TERLALU_KERING
+  BAHAN_TERLALU_BASAH
+  PROTEIN_KURANG
+  SERAT_TERLALU_TINGGI
+  LEMAK_TERLALU_RENDAH
+  BINDER_RENDAH
+  PATI_RENDAH_PELET_TERAPUNG
+  DIAMETER_TIDAK_SESUAI_FASE
+  KADAR_AIR_AKHIR_TINGGI
+  LAINNYA
+}
+
+enum WarningSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum DeviceEventType {
+  PARAMETER_SENT // backend -> ESP32 via MQTT
+  STATUS_UPDATE // ESP32 -> backend heartbeat
+  PROCESS_COMPLETED
+  ERROR
+}
+
+// ===================================================================
+// USER & AUTH
+// (Account/Session/VerificationToken standar Auth.js ditambahkan
+// terpisah lewat Prisma Adapter — tidak ditulis manual di sini)
+// ===================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(MITRA)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  formulations          Formulation[]
+  devices               Device[]
+  ruleParamEdits        RuleParameter[]
+  ingredientAvailability UserIngredientAvailability[]
+
+  @@map("users")
+}
+
+// ===================================================================
+// REFERENCE DATA — Database Bahan Baku & Standar SNI
+// (Bagian 4 dokumen)
+// ===================================================================
+
+model FishSpecies {
+  id   String @id @default(cuid())
+  name String @unique // mis. "Lele Dumbo"
+
+  sniStandards SniStandard[]
+  formulations Formulation[]
+
+  @@map("fish_species")
+}
+
+// Satu baris per kombinasi spesies + fase budidaya.
+// Dipisah dari kode agar standar spesies baru tinggal insert row baru,
+// tanpa redeploy (lihat Bagian 9 catatan pengembangan).
+model SniStandard {
+  id            String      @id @default(cuid())
+  fishSpeciesId String
+  fishSpecies   FishSpecies @relation(fields: [fishSpeciesId], references: [id])
+  phase         FishPhase
+
+  proteinMinPct      Decimal @db.Decimal(5, 2)
+  lemakMinPct        Decimal @db.Decimal(5, 2)
+  seratKasarMaksPct  Decimal @db.Decimal(5, 2)
+  abuMaksPct         Decimal @db.Decimal(5, 2)
+  kadarAirMaksPct    Decimal @db.Decimal(5, 2)
+  diameterMinMm      Decimal @db.Decimal(5, 2)
+  diameterMaksMm     Decimal? @db.Decimal(5, 2) // null = tidak ada batas atas (mis. fase induk)
+
+  npnMaksPct                  Decimal @db.Decimal(5, 2)
+  floatingRateMinPct          Decimal @db.Decimal(5, 2)
+  stabilitasAirApungMinMenit  Int
+  stabilitasAirTenggelamMinMenit Int
+  aflatoksinMaksPpb           Decimal @db.Decimal(6, 2)
+  salmonellaHarusNegatif      Boolean @default(true)
+  antibiotikMaksUgKg          Decimal @db.Decimal(6, 2) @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([fishSpeciesId, phase])
+  @@map("sni_standards")
+}
+
+// Database nutrisi bahan baku (referensi, bukan stok transaksional).
+model Ingredient {
+  id     String @id @default(cuid())
+  name   String @unique // mis. "Tepung Ikan"
+
+  proteinPct        Decimal             @db.Decimal(5, 2)
+  lemakPct          Decimal             @db.Decimal(5, 2)
+  seratKasarPct     Decimal             @db.Decimal(5, 2)
+  abuPct            Decimal             @db.Decimal(5, 2)
+  kadarAirPct       Decimal             @db.Decimal(5, 2)
+  kandunganPati     IngredientCharacter? // dipakai untuk deteksi sumber pati (pelet terapung)
+  karakterBahan     IngredientCharacter @default(NETRAL)
+  hargaStandarPerKg Decimal             @db.Decimal(12, 2) // fallback kalau user tidak isi harga
+  statusTersedia    Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  formulationIngredients FormulationIngredient[]
+  userAvailability       UserIngredientAvailability[]
+
+  @@map("ingredients")
+}
+
+model UserIngredientAvailability {
+  id           String              @id @default(cuid())
+  userId       String
+  user         User                @relation(fields: [userId], references: [id])
+  ingredientId String
+  ingredient   Ingredient          @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  stokKg       Decimal             @db.Decimal(8, 2)
+  hargaPerKg   Decimal             @db.Decimal(12, 2)
+  kondisi      IngredientCondition @default(KERING)
+  bentuk       IngredientForm?
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([userId, ingredientId])
+  @@map("user_ingredient_availability")
+}
+
+// Threshold/nilai yang dipakai aturan rule-based. Dipisah dari kode
+// supaya hasil kalibrasi alat (Bagian 9) bisa diupdate lewat halaman
+// admin tanpa redeploy aplikasi.
+model RuleParameter {
+  id          String   @id @default(cuid())
+  key         String   @unique // mis. "suhu_heater_pelet_terapung_celcius"
+  value       String   // disimpan sebagai string, di-parse sesuai tipe saat dipakai
+  unit        String?
+  description String
+  category    String   // mis. "SUHU", "EXTRUDER", "PISAU", "MIXING", "KADAR_AIR"
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+
+  @@map("rule_parameters")
+}
+
+// ===================================================================
+// DEVICE (ESP32 fisik di lokasi mitra)
+// ===================================================================
+
+model Device {
+  id              String       @id @default(cuid())
+  deviceCode      String       @unique // mis. MAC address / kode unik alat
+  name            String
+  mqttTopic       String       @unique
+  ownerUserId     String
+  owner           User         @relation(fields: [ownerUserId], references: [id])
+  status          DeviceStatus @default(OFFLINE)
+  firmwareVersion String?
+  lastSeenAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  formulations Formulation[]
+  logs         DeviceLog[]
+
+  @@map("devices")
+}
+
+model DeviceLog {
+  id            String          @id @default(cuid())
+  deviceId      String
+  device        Device          @relation(fields: [deviceId], references: [id])
+  formulationId String?
+  formulation   Formulation?    @relation(fields: [formulationId], references: [id])
+  eventType     DeviceEventType
+  payload       Json? // payload MQTT mentah, untuk audit/debug
+
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, createdAt])
+  @@map("device_logs")
+}
+
+// ===================================================================
+// FORMULATION — Output Formulasi + Parameter Mesin per batch
+// (Bagian 5 & 6 dokumen)
+// ===================================================================
+
+model Formulation {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // --- Data Ikan ---
+  fishSpeciesId  String
+  fishSpecies    FishSpecies @relation(fields: [fishSpeciesId], references: [id])
+  phase          FishPhase
+  umurIkanHari   Int
+  jumlahIkanEkor Int
+  bobotRataRataGram Decimal? @db.Decimal(8, 2)
+
+  // --- Data Pelet ---
+  jenisPellet            PelletType
+  diameterPelletMm       Decimal      @db.Decimal(5, 2)
+  panjangPellet          PelletLength?
+  teksturTarget          String?
+  targetProduksiKgBatch  Decimal      @db.Decimal(8, 2)
+
+  // --- Preferensi Produksi ---
+  prioritas    FormulationPriority
+  modeOperasi  OperationMode
+  sumberDaya   PowerSource?
+
+  // --- Output Formulasi ---
+  totalBiayaRp        Decimal   @db.Decimal(12, 2)
+  estimasiProteinPct  Decimal   @db.Decimal(5, 2)
+  estimasiLemakPct    Decimal   @db.Decimal(5, 2)
+  estimasiSeratPct    Decimal   @db.Decimal(5, 2)
+  estimasiAbuPct      Decimal   @db.Decimal(5, 2)
+  estimasiKadarAirPct Decimal   @db.Decimal(5, 2)
+  statusSni           SniStatus
+  saranKoreksi        String?
+
+  // --- Device terkait (jika mode otomatis & terkirim ke mesin) ---
+  deviceId String?
+  device   Device? @relation(fields: [deviceId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  ingredients       FormulationIngredient[]
+  machineParameter  MachineParameter?
+  warnings          Warning[]
+  deviceLogs        DeviceLog[]
+
+  @@index([userId, createdAt])
+  @@map("formulations")
+}
+
+// Join table komposisi bahan per formulasi.
+// Nutrisi & harga di-snapshot di sini (bukan join langsung ke
+// Ingredient) supaya riwayat formulasi lama tetap akurat meskipun
+// data referensi Ingredient diperbarui di kemudian hari.
+model FormulationIngredient {
+  id            String      @id @default(cuid())
+  formulationId String
+  formulation   Formulation @relation(fields: [formulationId], references: [id], onDelete: Cascade)
+  ingredientId  String
+  ingredient    Ingredient  @relation(fields: [ingredientId], references: [id])
+
+  jumlahKg     Decimal             @db.Decimal(8, 3)
+  persentase   Decimal             @db.Decimal(5, 2)
+  hargaPerKgSaatItu Decimal        @db.Decimal(12, 2)
+  kondisiBahan IngredientCondition
+  bentukBahan  IngredientForm?
+
+  // snapshot nutrisi bahan saat formulasi dihitung
+  proteinPctSaatItu    Decimal @db.Decimal(5, 2)
+  lemakPctSaatItu      Decimal @db.Decimal(5, 2)
+  seratKasarPctSaatItu Decimal @db.Decimal(5, 2)
+
+  @@map("formulation_ingredients")
+}
+
+// Output parameter mesin — relasi 1:1 dengan Formulation.
+model MachineParameter {
+  id            String      @id @default(cuid())
+  formulationId String      @unique
+  formulation   Formulation @relation(fields: [formulationId], references: [id], onDelete: Cascade)
+
+  suhuHeaterCelcius       Decimal @db.Decimal(5, 2)
+  kecepatanExtruderRpm    Decimal @db.Decimal(6, 2)
+  kecepatanPisauRpm       Decimal @db.Decimal(6, 2)
+  waktuMixingMenit        Decimal @db.Decimal(5, 2)
+  targetKadarAirAdonanPct Decimal @db.Decimal(5, 2)
+  estimasiAirTambahanMl   Decimal @db.Decimal(8, 2)
+  urutanProses            Json // array string langkah-langkah, ditampilkan ke operator/ESP32 LCD
+
+  createdAt DateTime @default(now())
+
+  @@map("machine_parameters")
+}
+
+// Output peringatan & rekomendasi — bisa lebih dari satu per formulasi.
+model Warning {
+  id            String          @id @default(cuid())
+  formulationId String
+  formulation   Formulation     @relation(fields: [formulationId], references: [id], onDelete: Cascade)
+
+  jenis         WarningType
+  severity      WarningSeverity @default(WARNING)
+  rekomendasi   String
+
+  createdAt DateTime @default(now())
+
+  @@map("warnings")
+}
