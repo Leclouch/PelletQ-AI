@@ -1,5 +1,5 @@
 import { BahanItem, IngredientOption, UserIngredientAvailability } from './types';
-import { KONDISI_DISPLAY, BENTUK_DISPLAY, EMPTY_BAHAN } from './constants';
+import { EMPTY_BAHAN } from './constants';
 
 export const rp = (n: number) => 'Rp ' + Math.round(n).toLocaleString('id-ID');
 export const todayStr = () => new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -30,11 +30,7 @@ export function getDefaultBahan(
   ingredients: IngredientOption[],
 ): BahanItem[] {
   if (userAvailability.length === 0) {
-    return [
-      { ...EMPTY_BAHAN, kondisi: 'Kering', bentuk: 'Halus' },
-      { ...EMPTY_BAHAN, kondisi: 'Kering', bentuk: 'Sedang' },
-      { ...EMPTY_BAHAN, kondisi: 'Kering', bentuk: 'Sedang' },
-    ];
+    return [{ ...EMPTY_BAHAN }, { ...EMPTY_BAHAN }, { ...EMPTY_BAHAN }];
   }
   const rows = userAvailability.slice(0, 8).map((avail): BahanItem => {
     const ing = ingredients.find(i => i.id === avail.ingredientId);
@@ -43,8 +39,6 @@ export function getDefaultBahan(
       nama: ing?.name ?? '',
       stok: String(avail.stokKg),
       harga: String(avail.hargaPerKg),
-      kondisi: KONDISI_DISPLAY[avail.kondisi] ?? 'Kering',
-      bentuk: avail.bentuk ? (BENTUK_DISPLAY[avail.bentuk] ?? 'Sedang') : 'Sedang',
     };
   });
   // Ensure at least 3 rows

@@ -123,6 +123,7 @@ enum DeviceEventType {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
+  username     String?  @unique // dipakai untuk login (Credentials)
   passwordHash String
   name         String
   role         Role     @default(MITRA)

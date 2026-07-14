@@ -10,6 +10,13 @@ interface ResultScreenProps {
   onBack: () => void;
 }
 
+function batchInstruksi(b: { batchSizeKg: number; jumlahBatchPenuh: number; sisaKg: number }): string {
+  const parts: string[] = [];
+  if (b.jumlahBatchPenuh > 0) parts.push(`Ulangi ${b.jumlahBatchPenuh}× (masing-masing ${b.batchSizeKg} kg)`);
+  if (b.sisaKg > 0) parts.push(`${parts.length ? '+ ' : ''}1 batch terakhir ${b.sisaKg} kg (skala resep × ${(b.sisaKg / b.batchSizeKg).toFixed(2).replace('.', ',')})`);
+  return parts.join(' ') || `1 batch ${b.batchSizeKg} kg`;
+}
+
 export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
   const res = entry.result;
   const sniOk = res.validasiSni.statusKeseluruhan === 'SESUAI';
@@ -62,10 +69,32 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
             </div>
           ))}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 13 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800 }}>Total Batch ({entry.targetKg} kg)</span>
+            <span style={{ fontSize: 13.5, fontWeight: 800 }}>Total Produksi ({entry.targetKg} kg)</span>
             <span style={{ fontSize: 15, fontWeight: 800 }}>{rp(res.formulasi.totalBiayaRp)}</span>
           </div>
         </div>
+
+        {/* Resep per Batch */}
+        {res.resepPerBatch && res.batchInfo && (
+          <div style={{ background: '#fff', border: '1.5px solid #1A8A5E', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 7, height: 18, borderRadius: 4, background: '#1A8A5E' }} />
+              <div style={{ fontSize: 16, fontWeight: 800 }}>Resep per Batch ({res.batchInfo.batchSizeKg} kg)</div>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#3E8C68', marginBottom: 10, lineHeight: 1.4 }}>
+              {batchInstruksi(res.batchInfo)}
+            </div>
+            {res.resepPerBatch.map((it, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F2EEE2' }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{it.name}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#11623F' }}>{it.jumlahKg.toFixed(2).replace('.', ',')} kg</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9AA69E', minWidth: 42, textAlign: 'right' }}>{it.persentase.toFixed(1)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Biaya highlight */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

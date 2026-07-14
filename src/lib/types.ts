@@ -28,8 +28,6 @@ export interface BahanItem {
   nama: string;
   stok: string;
   harga: string;
-  kondisi: string;
-  bentuk: string;
 }
 
 export interface FormData {
@@ -37,13 +35,8 @@ export interface FormData {
   umur: string;
   jumlah: string;
   bobot: string;
-  jenisPelet: string;
-  diameter: string;
-  panjang: string;
   targetProduksi: string;
   bahan: BahanItem[];
-  prioritas: string;
-  mode: string;
 }
 
 export interface ApiResult {
@@ -65,6 +58,17 @@ export interface ApiResult {
       kadarAirPct: number;
     };
   };
+  batchInfo: {
+    batchSizeKg: number;
+    jumlahBatchPenuh: number;
+    sisaKg: number;
+  };
+  resepPerBatch: Array<{
+    ingredientId: string;
+    name: string;
+    jumlahKg: number;
+    persentase: number;
+  }>;
   validasiSni: {
     statusKeseluruhan: 'SESUAI' | 'BELUM_SESUAI';
     items: Array<{
@@ -88,6 +92,12 @@ export interface ApiResult {
     severity: 'INFO' | 'WARNING' | 'CRITICAL';
     rekomendasi: string;
   }>;
+}
+
+export interface Diagnosa {
+  jenis: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  rekomendasi: string;
 }
 
 export interface RiwayatEntry {

@@ -4,10 +4,9 @@ import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
 import StickyFooter from '@/components/ui/StickyFooter';
 import Step1Fish from '@/components/form-steps/Step1Fish';
-import Step2Pellet from '@/components/form-steps/Step2Pellet';
 import Step3Ingredients from '@/components/form-steps/Step3Ingredients';
-import Step4Preferences from '@/components/form-steps/Step4Preferences';
-import { FormData, IngredientOption } from '@/lib/types';
+import Step3Summary from '@/components/form-steps/Step3Summary';
+import { FormData, IngredientOption, Diagnosa } from '@/lib/types';
 
 interface FormScreenProps {
   form: FormData;
@@ -15,6 +14,7 @@ interface FormScreenProps {
   ingredients: IngredientOption[];
   computing: boolean;
   apiError: string | null;
+  diagnosa: Diagnosa[] | null;
   openBahan: number | null;
   openBahanDetails: Record<number, boolean>;
   onGoDash: () => void;
@@ -23,7 +23,6 @@ interface FormScreenProps {
   onField: (name: keyof FormData, value: string) => void;
   onChoice: (field: string, value: string) => void;
   onBahanField: (idx: number, name: string, value: string) => void;
-  onBahanChoice: (idx: number, field: string, value: string) => void;
   onSelectIngredient: (idx: number, id: string, name: string) => void;
   onToggleMenu: (idx: number | null) => void;
   onToggleDetail: (idx: number) => void;
@@ -32,13 +31,13 @@ interface FormScreenProps {
   onRemoveBahan: (idx: number) => void;
 }
 
-const STEP_TITLES = ['Data Ikan', 'Data Pelet', 'Bahan Baku', 'Preferensi'];
+const STEP_TITLES = ['Data Ikan', 'Bahan Baku', 'Ringkasan'];
 
 export default function FormScreen({
-  form, step, ingredients, computing, apiError,
+  form, step, ingredients, computing, apiError, diagnosa,
   openBahan, openBahanDetails,
   onGoDash, onPrevStep, onNextStep, onField, onChoice,
-  onBahanField, onBahanChoice, onSelectIngredient,
+  onBahanField, onSelectIngredient,
   onToggleMenu, onToggleDetail, onCloseMenus, onAddBahan, onRemoveBahan,
 }: FormScreenProps) {
   return (
@@ -46,10 +45,10 @@ export default function FormScreen({
       <StickyHeader
         onBack={onGoDash}
         title="Buat Formulasi"
-        subtitle={`Langkah ${step} dari 4 · ${STEP_TITLES[step - 1]}`}
+        subtitle={`Langkah ${step} dari 3 · ${STEP_TITLES[step - 1]}`}
       >
         <div style={{ display: 'flex', gap: 7 }}>
-          {[1, 2, 3, 4].map(n => (
+          {[1, 2, 3].map(n => (
             <div key={n} style={{ flex: 1, height: 5, borderRadius: 999, background: n <= step ? '#1A8A5E' : '#E6E0D1', transition: 'background .25s' }} />
           ))}
         </div>
@@ -57,8 +56,7 @@ export default function FormScreen({
 
       <div style={{ flex: 1, padding: '18px 18px 120px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {step === 1 && <Step1Fish form={form} onField={onField} onChoice={onChoice} />}
-        {step === 2 && <Step2Pellet form={form} onField={onField} onChoice={onChoice} />}
-        {step === 3 && (
+        {step === 2 && (
           <Step3Ingredients
             form={form}
             ingredients={ingredients}
@@ -67,14 +65,13 @@ export default function FormScreen({
             onAddBahan={onAddBahan}
             onRemoveBahan={onRemoveBahan}
             onBahanField={onBahanField}
-            onBahanChoice={onBahanChoice}
             onSelectIngredient={onSelectIngredient}
             onToggleMenu={onToggleMenu}
             onToggleDetail={onToggleDetail}
             onCloseMenus={onCloseMenus}
           />
         )}
-        {step === 4 && <Step4Preferences form={form} onChoice={onChoice} apiError={apiError} />}
+        {step === 3 && <Step3Summary form={form} onField={onField} apiError={apiError} diagnosa={diagnosa} />}
       </div>
 
       <StickyFooter>
@@ -82,7 +79,7 @@ export default function FormScreen({
           {step === 1 ? 'Batal' : 'Kembali'}
         </button>
         <button onClick={onNextStep} disabled={computing} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, padding: 15, borderRadius: 14, background: computing ? '#E8E2D4' : 'linear-gradient(135deg,#1A8A5E 0%,#11623F 100%)', color: computing ? '#A6AFA7' : '#fff', fontSize: 15.5, fontWeight: 800, cursor: computing ? 'not-allowed' : 'pointer', boxShadow: computing ? 'none' : '0 6px 16px rgba(17,98,63,.24)' }}>
-          {step === 4 ? 'Hitung Formulasi ✨' : 'Lanjut →'}
+          {step === 3 ? 'Hitung Formulasi ✨' : 'Lanjut →'}
         </button>
       </StickyFooter>
 

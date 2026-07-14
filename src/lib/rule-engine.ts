@@ -107,10 +107,11 @@ export function computeMachineParams(
   if (input.kondisiBahanDominan === "KERING") {
     const tambahan = param(params, "mixing_tambahan_kering_menit", 5);
     mixingMenit += tambahan;
+    // Bahan selalu kering (tepung) — ini panduan standar, bukan peringatan.
     warnings.push({
       jenis: "BAHAN_TERLALU_KERING",
-      severity: "WARNING",
-      rekomendasi: "Bahan terlalu kering. Tambahkan air secukupnya dan waktu mixing diperpanjang.",
+      severity: "INFO",
+      rekomendasi: "Bahan kering. Tambahkan air secukupnya saat mixing dan perpanjang waktu mixing agar adonan homogen.",
     });
   }
 

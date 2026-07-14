@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Test POST /api/formulation — PelletQ-AI
 # Prasyarat: `pnpm dev` jalan di :3000 dan Docker (Postgres) sudah up + seed.
+#
+# Sekarang endpoint diproteksi Auth.js: harus login dulu (Credentials) untuk
+# mendapat cookie session, lalu pakai cookie itu saat POST formulasi.
 
 set -euo pipefail
 
-URL="http://localhost:3000/api/formulation"
+BASE="http://localhost:3000"
+URL="$BASE/api/formulation"
+COOKIES="$(dirname "$0")/cookies.txt"
+
+USERNAME="pelletq"
+PASSWORD="admin321"
 
 # fishSpeciesId & ingredientId diambil dari database (seed). Update jika re-seed.
 read -r -d '' BODY <<'JSON' || true
@@ -30,8 +38,36 @@ read -r -d '' BODY <<'JSON' || true
 }
 JSON
 
-echo "POST $URL"
-curl -s -X POST "$URL" \
+# ------------------------------------------------------------------
+# 1. Login: ambil CSRF token (sekaligus set cookie csrf ke jar), lalu
+#    POST ke callback credentials untuk mendapat cookie session.
+# ------------------------------------------------------------------
+echo "→ Login sebagai $USERNAME"
+CSRF=$(curl -s -c "$COOKIES" "$BASE/api/auth/csrf" \
+  | grep -o '"csrfToken":"[^"]*"' | cut -d'"' -f4)
+
+curl -s -c "$COOKIES" -b "$COOKIES" \
+  -X POST "$BASE/api/auth/callback/credentials" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "csrfToken=$CSRF" \
+  --data-urlencode "username=$USERNAME" \
+  --data-urlencode "password=$PASSWORD" \
+  --data-urlencode "callbackUrl=$BASE/" \
+  -o /dev/null
+
+if grep -q "authjs.session-token" "$COOKIES"; then
+  echo "✓ Cookie session diperoleh"
+else
+  echo "✗ Gagal login — cookie session tidak ada. Hentikan."
+  exit 1
+fi
+
+# ------------------------------------------------------------------
+# 2. POST formulasi dengan cookie session
+# ------------------------------------------------------------------
+echo ""
+echo "POST $URL (dengan cookie session)"
+curl -s -b "$COOKIES" -X POST "$URL" \
   -H "Content-Type: application/json" \
   -d "$BODY" \
   -w "\n\nHTTP:%{http_code}\n"

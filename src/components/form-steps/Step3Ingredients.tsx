@@ -1,4 +1,3 @@
-import SmallPill from '@/components/ui/SmallPill';
 import IngredientDropdown from '@/components/ui/IngredientDropdown';
 import { FormData, IngredientOption } from '@/lib/types';
 
@@ -10,14 +9,13 @@ interface Step3Props {
   onAddBahan: () => void;
   onRemoveBahan: (idx: number) => void;
   onBahanField: (idx: number, name: string, value: string) => void;
-  onBahanChoice: (idx: number, field: string, value: string) => void;
   onSelectIngredient: (idx: number, id: string, name: string) => void;
   onToggleMenu: (idx: number | null) => void;
   onToggleDetail: (idx: number) => void;
   onCloseMenus: () => void;
 }
 
-export default function Step3Ingredients({ form, ingredients, openBahan, openBahanDetails, onAddBahan, onRemoveBahan, onBahanField, onBahanChoice, onSelectIngredient, onToggleMenu, onToggleDetail, onCloseMenus }: Step3Props) {
+export default function Step3Ingredients({ form, ingredients, openBahan, openBahanDetails, onAddBahan, onRemoveBahan, onBahanField, onSelectIngredient, onToggleMenu, onToggleDetail, onCloseMenus }: Step3Props) {
   const canAdd = form.bahan.length < 8;
 
   return (
@@ -53,42 +51,22 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
 
             {!detailOpen && b.nama && (
               <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', padding: '0 2px' }}>
-                {[b.stok && `${b.stok} kg`, b.harga && `Rp ${Number(b.harga).toLocaleString('id')}/kg`, b.kondisi, b.bentuk].filter(Boolean).join(' · ')}
+                {[b.stok && `${b.stok} kg`, b.harga && `Rp ${Number(b.harga).toLocaleString('id')}/kg`].filter(Boolean).join(' · ') || 'Belum diisi'}
               </div>
             )}
 
             {detailOpen && (
-              <>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <input value={b.stok} onChange={e => onBahanField(i, 'stok', e.target.value)} inputMode="numeric" placeholder="Stok" style={{ width: '100%', padding: '10px 36px 10px 11px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
-                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>kg</span>
-                  </div>
-                  <div style={{ flex: 1.3, position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#9AA69E' }}>Rp</span>
-                    <input value={b.harga} onChange={e => onBahanField(i, 'harga', e.target.value)} inputMode="numeric" placeholder="Harga" style={{ width: '100%', padding: '10px 32px 10px 32px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
-                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>/kg</span>
-                  </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <input value={b.stok} onChange={e => onBahanField(i, 'stok', e.target.value)} inputMode="numeric" placeholder="Stok" style={{ width: '100%', padding: '10px 36px 10px 11px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>kg</span>
                 </div>
-                <div style={{ display: 'flex', gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9AA69E', marginBottom: 5 }}>Kondisi</div>
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      {['Kering', 'Agak Lembap', 'Basah'].map(v => (
-                        <SmallPill key={v} selected={b.kondisi === v} onClick={() => onBahanChoice(i, 'kondisi', v)}>{v}</SmallPill>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9AA69E', marginBottom: 5 }}>Bentuk</div>
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      {['Halus', 'Sedang', 'Kasar'].map(v => (
-                        <SmallPill key={v} selected={b.bentuk === v} onClick={() => onBahanChoice(i, 'bentuk', v)}>{v}</SmallPill>
-                      ))}
-                    </div>
-                  </div>
+                <div style={{ flex: 1.3, position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#9AA69E' }}>Rp</span>
+                  <input value={b.harga} onChange={e => onBahanField(i, 'harga', e.target.value)} inputMode="numeric" placeholder="Harga" style={{ width: '100%', padding: '10px 32px 10px 32px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>/kg</span>
                 </div>
-              </>
+              </div>
             )}
           </div>
         );

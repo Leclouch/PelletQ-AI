@@ -203,3 +203,148 @@ export function solveFormulation(
     },
   };
 }
+
+// ============================================================
+// DIAGNOSA INFEASIBLE — saran bahan yang harus ditambah/dikurangi
+// ============================================================
+
+export interface Diagnosa {
+  jenis: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  rekomendasi: string;
+}
+
+const PATI_NAMES = ["Tapioka", "Tepung Jagung"];
+
+// Cari persentase ekstrem (min/max) satu nutrisi yang bisa dicapai blend mana
+// pun, hanya dibatasi total berat = target dan stok tiap bahan. Mengabaikan
+// batasan nutrisi lain — jadi ini syarat perlu: bila bahkan nilai terbaik pun
+// melanggar batas SNI, nutrisi itulah biang infeasible-nya.
+function extremePct(
+  ingredients: LPIngredientInput[],
+  targetKg: number,
+  coef: (ing: LPIngredientInput) => number,
+  opType: "min" | "max"
+): number | null {
+  const model = {
+    optimize: "obj",
+    opType,
+    constraints: { totalBerat: { equal: targetKg } } as Record<
+      string,
+      { min?: number; max?: number; equal?: number }
+    >,
+    variables: {} as Record<string, Record<string, number>>,
+  };
+  for (const ing of ingredients) {
+    model.constraints[`stok_${ing.ingredientId}`] = { max: ing.stokKg };
+    model.variables[`ing_${ing.ingredientId}`] = {
+      obj: coef(ing),
+      totalBerat: 1,
+      [`stok_${ing.ingredientId}`]: 1,
+    };
+  }
+  const r = solver.Solve(model);
+  if (!r.feasible) return null;
+  return ((r.result as number) / targetKg) * 100;
+}
+
+export function diagnoseInfeasibility(
+  ingredients: LPIngredientInput[],
+  constraints: LPConstraints,
+  binderMinPct: number = 0,
+  patiMinPctTerapung: number = 0,
+  targetKg: number = 100
+): Diagnosa[] {
+  const out: Diagnosa[] = [];
+
+  // 0. Total stok tidak cukup untuk memenuhi target berat.
+  const totalStok = ingredients.reduce((s, i) => s + i.stokKg, 0);
+  if (totalStok < targetKg - 0.001) {
+    out.push({
+      jenis: "STOK_KURANG",
+      severity: "CRITICAL",
+      rekomendasi: `Total stok bahan hanya ${totalStok.toFixed(1)} kg, kurang dari target ${targetKg} kg. Tambah stok bahan atau kurangi target produksi.`,
+    });
+    return out; // batasan lain tak bisa dievaluasi bila berat pun tak terpenuhi
+  }
+
+  const namaTertinggi = (coef: (ing: LPIngredientInput) => number) =>
+    [...ingredients].sort((a, b) => coef(b) - coef(a))[0]?.name ?? "bahan";
+
+  // 1. Nutrisi minimum (protein, lemak) — cek nilai maksimum yang bisa dicapai.
+  const maxProtein = extremePct(ingredients, targetKg, (i) => i.proteinPct / 100, "max");
+  if (maxProtein !== null && maxProtein < constraints.proteinMinPct) {
+    out.push({
+      jenis: "PROTEIN_KURANG",
+      severity: "WARNING",
+      rekomendasi: `Protein maksimum yang bisa dicapai hanya ${maxProtein.toFixed(1)}% (minimum SNI ${constraints.proteinMinPct}%). Tambahkan bahan tinggi protein seperti tepung ikan atau bungkil kedelai.`,
+    });
+  }
+  const maxLemak = extremePct(ingredients, targetKg, (i) => i.lemakPct / 100, "max");
+  if (maxLemak !== null && maxLemak < constraints.lemakMinPct) {
+    out.push({
+      jenis: "LEMAK_KURANG",
+      severity: "WARNING",
+      rekomendasi: `Lemak maksimum yang bisa dicapai hanya ${maxLemak.toFixed(1)}% (minimum SNI ${constraints.lemakMinPct}%). Tambahkan bahan berlemak seperti dedak atau minyak ikan.`,
+    });
+  }
+
+  // 2. Nutrisi maksimum (serat, abu, kadar air) — cek nilai minimum yang bisa dicapai.
+  const minSerat = extremePct(ingredients, targetKg, (i) => i.seratKasarPct / 100, "min");
+  if (minSerat !== null && minSerat > constraints.seratKasarMaksPct) {
+    out.push({
+      jenis: "SERAT_BERLEBIH",
+      severity: "WARNING",
+      rekomendasi: `Serat kasar minimum tetap ${minSerat.toFixed(1)}% (maksimum SNI ${constraints.seratKasarMaksPct}%). Kurangi atau ganti bahan tinggi serat seperti ${namaTertinggi((i) => i.seratKasarPct)}.`,
+    });
+  }
+  const minAbu = extremePct(ingredients, targetKg, (i) => i.abuPct / 100, "min");
+  if (minAbu !== null && minAbu > constraints.abuMaksPct) {
+    out.push({
+      jenis: "ABU_BERLEBIH",
+      severity: "WARNING",
+      rekomendasi: `Kadar abu minimum tetap ${minAbu.toFixed(1)}% (maksimum SNI ${constraints.abuMaksPct}%). Kurangi bahan tinggi abu seperti ${namaTertinggi((i) => i.abuPct)}.`,
+    });
+  }
+  const minAir = extremePct(ingredients, targetKg, (i) => i.kadarAirPct / 100, "min");
+  if (minAir !== null && minAir > constraints.kadarAirMaksPct) {
+    out.push({
+      jenis: "KADAR_AIR_BERLEBIH",
+      severity: "WARNING",
+      rekomendasi: `Kadar air minimum tetap ${minAir.toFixed(1)}% (maksimum SNI ${constraints.kadarAirMaksPct}%). Keringkan atau kurangi bahan basah seperti ${namaTertinggi((i) => i.kadarAirPct)}.`,
+    });
+  }
+
+  // 3. Pengikat & pati (pelet terapung).
+  if (binderMinPct > 0) {
+    const maxBinder = extremePct(ingredients, targetKg, (i) => (i.karakterBahan === "MUDAH_MENGIKAT" ? 1 : 0), "max");
+    if (maxBinder !== null && maxBinder < binderMinPct) {
+      out.push({
+        jenis: "BINDER_KURANG",
+        severity: "WARNING",
+        rekomendasi: `Bahan pengikat maksimum ${maxBinder.toFixed(1)}% (minimum ${binderMinPct}%). Tambahkan tapioka agar pelet tidak mudah hancur.`,
+      });
+    }
+  }
+  if (patiMinPctTerapung > 0) {
+    const maxPati = extremePct(ingredients, targetKg, (i) => (PATI_NAMES.includes(i.name) ? 1 : 0), "max");
+    if (maxPati !== null && maxPati < patiMinPctTerapung) {
+      out.push({
+        jenis: "PATI_KURANG",
+        severity: "WARNING",
+        rekomendasi: `Bahan berpati maksimum ${maxPati.toFixed(1)}% (minimum ${patiMinPctTerapung}% untuk pelet terapung). Tambahkan tapioka atau tepung jagung.`,
+      });
+    }
+  }
+
+  // 4. Fallback bila tak ada batasan tunggal yang jelas melanggar (interaksi antar-batasan).
+  if (out.length === 0) {
+    out.push({
+      jenis: "KOMBINASI_TIDAK_LAYAK",
+      severity: "WARNING",
+      rekomendasi: "Kombinasi bahan tidak bisa memenuhi semua batas SNI sekaligus. Tambahkan bahan tinggi protein (mis. tepung ikan) dan tapioka sebagai pengikat, lalu coba lagi.",
+    });
+  }
+
+  return out;
+}

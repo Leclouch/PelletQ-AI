@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { config } from "dotenv";
 import path from "node:path";
+import bcrypt from "bcryptjs";
 
 config({ path: path.join(__dirname, "..", ".env") });
 
@@ -244,20 +245,32 @@ async function main() {
   console.log(`✓ RuleParameters: ${ruleParams.length} parameter`);
 
   // ============================================================
-  // 5. DUMMY USER (untuk development tanpa auth)
+  // 5. ADMIN USER (kredensial login)
+  // Username & password diambil dari env supaya produksi tak memakai
+  // nilai hardcode. Fallback dev dipakai kalau env kosong (+ warning).
   // ============================================================
+  const adminUsername = process.env.SEED_ADMIN_USERNAME || "pelletq";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "admin321";
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.warn(
+      "⚠ SEED_ADMIN_PASSWORD belum diset — memakai password default 'admin321'. " +
+        "JANGAN dipakai di produksi; set SEED_ADMIN_PASSWORD di .env."
+    );
+  }
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
   await prisma.user.upsert({
     where: { email: "dev@pelletq.local" },
-    update: {},
+    update: { username: adminUsername, passwordHash: adminPasswordHash },
     create: {
       email: "dev@pelletq.local",
-      passwordHash: "dev-only-no-auth",
+      username: adminUsername,
+      passwordHash: adminPasswordHash,
       name: "Developer",
       role: "ADMIN",
     },
   });
 
-  console.log("✓ User: dev@pelletq.local (dummy untuk development)");
+  console.log(`✓ User: ${adminUsername} (login username)`);
 }
 
 main()

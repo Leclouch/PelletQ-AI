@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
-import SmallPill from '@/components/ui/SmallPill';
 import { IngredientOption, UserIngredientAvailability } from '@/lib/types';
-import { KARAKTER_DISPLAY, KARAKTER_OPTIONS, KONDISI_DISPLAY, BENTUK_DISPLAY } from '@/lib/constants';
+import { KARAKTER_DISPLAY, KARAKTER_OPTIONS } from '@/lib/constants';
 import { rp } from '@/lib/helpers';
 
 interface IngredientsScreenProps {
@@ -19,13 +18,10 @@ interface CatalogForm {
   name: string; proteinPct: string; lemakPct: string; seratKasarPct: string;
   abuPct: string; kadarAirPct: string; karakterBahan: string; hargaStandarPerKg: string;
 }
-interface AvailForm { stokKg: string; hargaPerKg: string; kondisi: string; bentuk: string; }
+interface AvailForm { stokKg: string; hargaPerKg: string; }
 
 const EMPTY_CAT: CatalogForm = { name: '', proteinPct: '', lemakPct: '', seratKasarPct: '', abuPct: '', kadarAirPct: '', karakterBahan: 'NETRAL', hargaStandarPerKg: '' };
-const EMPTY_AVAIL: AvailForm = { stokKg: '', hargaPerKg: '', kondisi: 'KERING', bentuk: 'SEDANG' };
-
-const KONDISI_OPTS = ['KERING', 'AGAK_LEMBAP', 'BASAH'];
-const BENTUK_OPTS = ['HALUS', 'SEDANG', 'KASAR'];
+const EMPTY_AVAIL: AvailForm = { stokKg: '', hargaPerKg: '' };
 
 const fieldStyle: React.CSSProperties = { width: '100%', padding: '10px 11px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, fontWeight: 700, background: '#FCFBF7', color: '#1C2E27' };
 const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#9AA69E', marginBottom: 4, display: 'block' };
@@ -101,7 +97,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
     setAvailForms(f => ({
       ...f,
       [ing.id]: existing
-        ? { stokKg: String(existing.stokKg), hargaPerKg: String(existing.hargaPerKg), kondisi: existing.kondisi, bentuk: existing.bentuk ?? 'SEDANG' }
+        ? { stokKg: String(existing.stokKg), hargaPerKg: String(existing.hargaPerKg) }
         : { ...EMPTY_AVAIL, hargaPerKg: String(ing.hargaStandarPerKg) },
     }));
     setExpandedAvail(expandedAvail === ing.id ? null : ing.id);
@@ -130,7 +126,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
     try {
       const res = await fetch('/api/user-ingredients', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredientId, stokKg: parseFloat(f.stokKg) || 0, hargaPerKg: parseFloat(f.hargaPerKg) || 0, kondisi: f.kondisi, bentuk: f.bentuk || null }),
+        body: JSON.stringify({ ingredientId, stokKg: parseFloat(f.stokKg) || 0, hargaPerKg: parseFloat(f.hargaPerKg) || 0, kondisi: 'KERING', bentuk: null }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       setExpandedAvail(null); onSaved();
@@ -257,7 +253,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#46554E' }}>Ketersediaan saya</div>
                     {avail ? (
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>
-                        {avail.stokKg} kg · {rp(avail.hargaPerKg)}/kg · {KONDISI_DISPLAY[avail.kondisi]}{avail.bentuk ? ` · ${BENTUK_DISPLAY[avail.bentuk]}` : ''}
+                        {avail.stokKg} kg · {rp(avail.hargaPerKg)}/kg
                       </div>
                     ) : (
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#B3BCB4', marginTop: 2 }}>Belum diatur</div>
@@ -284,24 +280,6 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                         <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#9AA69E' }}>Rp</span>
                         <input value={avForm.hargaPerKg} onChange={e => setAvailForms(f => ({ ...f, [ing.id]: { ...f[ing.id], hargaPerKg: e.target.value } }))} inputMode="numeric" placeholder="Harga" style={{ ...fieldStyle, padding: '10px 32px 10px 30px' }} />
                         <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>/kg</span>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 14 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9AA69E', marginBottom: 5 }}>Kondisi</div>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          {KONDISI_OPTS.map(v => (
-                            <SmallPill key={v} selected={avForm.kondisi === v} onClick={() => setAvailForms(f => ({ ...f, [ing.id]: { ...f[ing.id], kondisi: v } }))}>{KONDISI_DISPLAY[v]}</SmallPill>
-                          ))}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9AA69E', marginBottom: 5 }}>Bentuk</div>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          {BENTUK_OPTS.map(v => (
-                            <SmallPill key={v} selected={avForm.bentuk === v} onClick={() => setAvailForms(f => ({ ...f, [ing.id]: { ...f[ing.id], bentuk: v } }))}>{BENTUK_DISPLAY[v]}</SmallPill>
-                          ))}
-                        </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>

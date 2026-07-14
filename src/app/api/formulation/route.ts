@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { solveFormulation, type LPIngredientInput } from "@/lib/lp-solver";
+import { solveFormulation, diagnoseInfeasibility, type LPIngredientInput } from "@/lib/lp-solver";
 import { validateSni } from "@/lib/sni-validator";
 import { computeMachineParams, type RuleParams } from "@/lib/rule-engine";
+import { BATCH_KG, PHASE_DIAMETER_MM } from "@/lib/constants";
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+
     const body = await req.json();
 
     const {
@@ -14,16 +22,18 @@ export async function POST(req: NextRequest) {
       umurIkanHari,
       jumlahIkanEkor,
       bobotRataRataGram,
-      jenisPelet,
-      diameterPelletMm,
-      panjangPelet,
       teksturTarget,
       targetProduksiKgBatch,
       bahanBaku,
-      prioritas,
-      modeOperasi,
       sumberDaya,
     } = body;
+
+    // Nilai yang tak lagi dipilih user — dikunci sesuai kemampuan mesin.
+    const jenisPelet = "TERAPUNG";
+    const prioritas = "TERMURAH";
+    const modeOperasi = "MANUAL";
+    const panjangPelet = null;
+    const diameterPelletMm = PHASE_DIAMETER_MM[phase] ?? 2.5;
 
     // 1. Ambil standar SNI
     const sniStandard = await prisma.sniStandard.findUnique({
@@ -50,8 +60,6 @@ export async function POST(req: NextRequest) {
         ingredientId: string;
         stokKg: number;
         hargaPerKg: number;
-        kondisiBahan: string;
-        bentukBahan: string | null;
       }) => {
         const dbIng = dbIngredients.find((d) => d.id === b.ingredientId);
         if (!dbIng) throw new Error(`Bahan ${b.ingredientId} tidak ditemukan di database.`);
@@ -65,8 +73,9 @@ export async function POST(req: NextRequest) {
           seratKasarPct: Number(dbIng.seratKasarPct),
           abuPct: Number(dbIng.abuPct),
           kadarAirPct: Number(dbIng.kadarAirPct),
-          kondisiBahan: b.kondisiBahan,
-          bentukBahan: b.bentukBahan,
+          // Semua bahan diperlakukan kering & halus (mesin hanya menerima itu).
+          kondisiBahan: "KERING",
+          bentukBahan: "HALUS",
           karakterBahan: String(dbIng.karakterBahan),
         };
       }
@@ -98,10 +107,24 @@ export async function POST(req: NextRequest) {
     );
 
     if (!lpResult.feasible) {
+      const diagnosa = diagnoseInfeasibility(
+        lpIngredients,
+        {
+          proteinMinPct: Number(sniStandard.proteinMinPct),
+          lemakMinPct: Number(sniStandard.lemakMinPct),
+          seratKasarMaksPct: Number(sniStandard.seratKasarMaksPct),
+          abuMaksPct: Number(sniStandard.abuMaksPct),
+          kadarAirMaksPct: Number(sniStandard.kadarAirMaksPct),
+        },
+        binderMinPct,
+        patiMinPctTerapung,
+        targetProduksiKgBatch
+      );
       return NextResponse.json(
         {
-          error: "Formulasi tidak layak (infeasible).",
-          saran: "Bahan baku yang tersedia tidak cukup untuk memenuhi standar SNI. Coba tambahkan bahan berprotein tinggi atau perbesar stok.",
+          error: "Formulasi belum memenuhi standar SNI.",
+          saran: diagnosa.map((d) => d.rekomendasi).join(" "),
+          diagnosa,
         },
         { status: 422 }
       );
@@ -155,12 +178,16 @@ export async function POST(req: NextRequest) {
       (a, b) => b[1] - a[1]
     )[0]?.[0] as "HALUS" | "SEDANG" | "KASAR" | undefined || null;
 
+    // Mesin memproses per batch 5 kg — parameter mesin (air tambahan, langkah
+    // proses) dihitung untuk satu batch, bukan total produksi.
+    const batchSizeKg = Math.min(targetProduksiKgBatch, BATCH_KG);
+
     const ruleResult = computeMachineParams(
       {
         jenisPelet,
         diameterMm: diameterPelletMm,
         panjangPelet: panjangPelet || null,
-        targetKg: targetProduksiKgBatch,
+        targetKg: batchSizeKg,
         kondisiBahanDominan: kondisiDominan,
         bentukBahanDominan: bentukDominan,
         estimasiKadarAirPct: lpResult.estimasi.kadarAirPct,
@@ -171,24 +198,13 @@ export async function POST(req: NextRequest) {
     );
 
     // 6. Simpan ke database
-    const devUser = await prisma.user.findUnique({
-      where: { email: "dev@pelletq.local" },
-    });
-
-    if (!devUser) {
-      return NextResponse.json(
-        { error: "User tidak ditemukan. Jalankan seed terlebih dahulu." },
-        { status: 500 }
-      );
-    }
-
     const saranKoreksi = ruleResult.warnings.length > 0
       ? ruleResult.warnings.map((w) => w.rekomendasi).join(" | ")
       : null;
 
     const formulation = await prisma.formulation.create({
       data: {
-        userId: devUser.id,
+        userId,
         fishSpeciesId,
         phase,
         umurIkanHari,
@@ -253,6 +269,13 @@ export async function POST(req: NextRequest) {
     });
 
     // 7. Response
+    const resepPerBatch = lpResult.ingredients.map((ing) => ({
+      ingredientId: ing.ingredientId,
+      name: ing.name,
+      persentase: ing.persentase,
+      jumlahKg: Math.round((ing.persentase / 100) * batchSizeKg * 1000) / 1000,
+    }));
+
     return NextResponse.json({
       formulationId: formulation.id,
       formulasi: {
@@ -260,6 +283,12 @@ export async function POST(req: NextRequest) {
         totalBiayaRp: lpResult.totalBiayaRp,
         estimasiNutrisi: lpResult.estimasi,
       },
+      batchInfo: {
+        batchSizeKg,
+        jumlahBatchPenuh: Math.floor(targetProduksiKgBatch / BATCH_KG),
+        sisaKg: Math.round((targetProduksiKgBatch % BATCH_KG) * 1000) / 1000,
+      },
+      resepPerBatch,
       validasiSni: validasi,
       parameterMesin: ruleResult.machineParams,
       peringatan: ruleResult.warnings,

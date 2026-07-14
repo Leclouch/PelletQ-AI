@@ -46,11 +46,16 @@ MQTT_BROKER_URL="mqtt://localhost:1883"
 # Gemini API (opsional, diisi nanti)
 GEMINI_API_KEY=""
 
-# Auth.js (opsional, generate dengan: openssl rand -base64 32)
-AUTH_SECRET=""
+# Auth.js — generate dengan: openssl rand -base64 32
+AUTH_SECRET="isi-dengan-hasil-generate"
+AUTH_TRUST_HOST="true"
+
+# Kredensial admin awal (dipakai `pnpm prisma db seed`)
+SEED_ADMIN_USERNAME="pelletq"
+SEED_ADMIN_PASSWORD="admin321"
 ```
 
-Kredensial database di atas cocok dengan yang ada di `docker-compose.yml`, jadi tidak perlu diubah untuk development lokal.
+Referensi lengkap ada di `.env.example`. Kredensial database di atas cocok dengan `docker-compose.yml`, jadi tidak perlu diubah untuk development lokal. Login default dev: **`pelletq` / `admin321`**.
 
 ## Menjalankan
 
@@ -95,6 +100,48 @@ Karena backend berupa API routes di dalam proyek yang sama, endpoint langsung ak
 - `GET/POST /api/ingredients` & `/api/user-ingredients` — manajemen bahan
 - `GET /api/options` — opsi form
 - `GET /api/docs` + halaman **/docs** — dokumentasi API (OpenAPI)
+
+## Deploy (Self-Host)
+
+Untuk menjalankan di server sendiri (bukan `pnpm dev`). Aplikasi wajib diakses lewat **HTTPS** — Auth.js memakai cookie sesi `Secure`, jadi di atas `http://` polos login akan tampak berhasil tapi balik lagi ke `/login`.
+
+### 1. Environment produksi
+
+Set env berikut di server (jangan commit `.env`):
+
+| Variabel | Wajib | Catatan |
+|----------|:-----:|---------|
+| `DATABASE_URL` | ✅ | Ganti `pelletq_dev_password` dengan password DB produksi. |
+| `AUTH_SECRET` | ✅ | Secret baru & acak: `openssl rand -base64 32`. Jangan pakai punya dev. |
+| `AUTH_TRUST_HOST` | ✅ | `"true"` — wajib saat di belakang reverse proxy (Nginx/Caddy). Tanpa ini login/redirect rusak. |
+| `SEED_ADMIN_USERNAME` | ✅ | Username admin awal. |
+| `SEED_ADMIN_PASSWORD` | ✅ | Password admin **kuat**. Kalau kosong, seed memakai `admin321` (hanya dev) dan menampilkan peringatan. |
+| `MQTT_BROKER_URL` | – | Sesuaikan bila broker MQTT terpisah. |
+
+### 2. Build & siapkan database
+
+```bash
+pnpm install --frozen-lockfile
+pnpm prisma migrate deploy      # apply migrasi (BUKAN `migrate dev` di produksi)
+pnpm prisma db seed             # buat user admin dari SEED_ADMIN_* di atas
+pnpm build
+```
+
+### 3. Jalankan
+
+```bash
+pnpm start                      # Next.js production server (port 3000)
+```
+
+Taruh di belakang reverse proxy ber-TLS (Nginx/Caddy) yang meneruskan ke `localhost:3000`.
+
+### Checklist keamanan
+
+- [ ] `SEED_ADMIN_PASSWORD` diganti dari default `admin321`.
+- [ ] `AUTH_SECRET` baru & rahasia (tidak sama dengan dev, tidak di-commit).
+- [ ] `AUTH_TRUST_HOST="true"` + akses lewat HTTPS.
+- [ ] Password `DATABASE_URL` bukan `pelletq_dev_password`.
+- [ ] (Opsional) rate-limit endpoint login, hapus halaman `/test` bila tak dipakai.
 
 ## Perintah Berguna
 

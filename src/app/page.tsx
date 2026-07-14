@@ -5,8 +5,8 @@ import DashboardScreen from '@/components/screens/DashboardScreen';
 import FormScreen from '@/components/screens/FormScreen';
 import ResultScreen from '@/components/screens/ResultScreen';
 import IngredientsScreen from '@/components/screens/IngredientsScreen';
-import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult } from '@/lib/types';
-import { DEFAULT_FORM, PHASE_MAP, PELLET_MAP, PANJANG_MAP, KONDISI_MAP, BENTUK_MAP, PRIORITAS_MAP, DIAMETER_MM, DIAMETER_SUGGEST, KONDISI_DISPLAY, BENTUK_DISPLAY } from '@/lib/constants';
+import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult, Diagnosa } from '@/lib/types';
+import { DEFAULT_FORM, PHASE_MAP } from '@/lib/constants';
 import { todayStr, getDefaultBahan } from '@/lib/helpers';
 
 export default function HomePage() {
@@ -25,6 +25,7 @@ export default function HomePage() {
   const [userAvailability, setUserAvailability] = useState<UserIngredientAvailability[]>([]);
   const [fishSpeciesId, setFishSpeciesId] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [diagnosa, setDiagnosa] = useState<Diagnosa[] | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('pelletq-riwayat');
@@ -64,7 +65,7 @@ export default function HomePage() {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
-  const goDash = () => { setScreen('dashboard'); setApiError(null); };
+  const goDash = () => { setScreen('dashboard'); setApiError(null); setDiagnosa(null); };
   const goIngredients = () => setScreen('ingredients');
 
   const startForm = () => {
@@ -73,6 +74,7 @@ export default function HomePage() {
     setStep(1);
     setScreen('form');
     setApiError(null);
+    setDiagnosa(null);
   };
 
   const prevStep = () => {
@@ -80,13 +82,18 @@ export default function HomePage() {
   };
 
   const nextStep = async () => {
-    if (step < 4) { setStep(s => s + 1); scrollTo(0, 0); return; }
+    // Validasi bahan saat pindah dari langkah Bahan Baku (2) ke Ringkasan (3).
+    if (step === 2 && form.bahan.filter(b => b.ingredientId).length < 3) {
+      setApiError('Minimal 3 bahan baku harus dipilih.');
+      return;
+    }
+    if (step < 3) { setStep(s => s + 1); scrollTo(0, 0); setApiError(null); return; }
 
     const validBahan = form.bahan.filter(b => b.ingredientId);
     if (validBahan.length < 3) { setApiError('Minimal 3 bahan baku harus dipilih.'); return; }
     if (!fishSpeciesId) { setApiError('Data spesies belum termuat. Coba refresh halaman.'); return; }
 
-    setComputing(true); setApiError(null);
+    setComputing(true); setApiError(null); setDiagnosa(null);
 
     const body = {
       fishSpeciesId,
@@ -94,25 +101,18 @@ export default function HomePage() {
       umurIkanHari: parseInt(form.umur) || 45,
       jumlahIkanEkor: parseInt(form.jumlah) || 1000,
       bobotRataRataGram: form.bobot ? parseFloat(form.bobot) : null,
-      jenisPelet: PELLET_MAP[form.jenisPelet] || 'TERAPUNG',
-      diameterPelletMm: DIAMETER_MM[form.diameter] ?? 2.5,
-      panjangPelet: PANJANG_MAP[form.panjang] || null,
       targetProduksiKgBatch: parseFloat(form.targetProduksi) || 25,
       bahanBaku: validBahan.map(b => ({
         ingredientId: b.ingredientId,
         stokKg: parseFloat(b.stok) || 999,
         hargaPerKg: parseFloat(b.harga) || (ingredients.find(i => i.id === b.ingredientId)?.hargaStandarPerKg ?? 10000),
-        kondisiBahan: KONDISI_MAP[b.kondisi] || 'KERING',
-        bentukBahan: BENTUK_MAP[b.bentuk] || null,
       })),
-      prioritas: PRIORITAS_MAP[form.prioritas] || 'SEIMBANG',
-      modeOperasi: form.mode === 'Otomatis' ? 'OTOMATIS' : 'MANUAL',
     };
 
     try {
       const res = await fetch('/api/formulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { setApiError(data.saran || data.error || 'Terjadi kesalahan.'); setComputing(false); return; }
+      if (!res.ok) { setApiError(data.saran || data.error || 'Terjadi kesalahan.'); setDiagnosa(data.diagnosa ?? null); setComputing(false); return; }
 
       const result = data as ApiResult;
       const targetKg = parseFloat(form.targetProduksi) || 25;
@@ -151,15 +151,9 @@ export default function HomePage() {
   // ── Form handlers ────────────────────────────────────────────────────────────
 
   const setField = (name: keyof FormData, value: string) => setForm(f => ({ ...f, [name]: value }));
-  const setChoice = (field: string, value: string) => setForm(f => {
-    const upd: Partial<FormData> = { [field]: value };
-    if (field === 'fase') upd.diameter = DIAMETER_SUGGEST[value] ?? '2-3mm';
-    return { ...f, ...upd };
-  });
+  const setChoice = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }));
   const setBahanField = (idx: number, name: string, value: string) =>
     setForm(f => ({ ...f, bahan: f.bahan.map((b, j) => j === idx ? { ...b, [name]: value } : b) }));
-  const setBahanChoice = (idx: number, field: string, value: string) =>
-    setForm(f => ({ ...f, bahan: f.bahan.map((b, j) => j === idx ? { ...b, [field]: value } : b) }));
   const selectIngredient = (idx: number, id: string, name: string) => {
     const ing = ingredients.find(i => i.id === id);
     const saved = userAvailability.find(a => a.ingredientId === id);
@@ -168,13 +162,11 @@ export default function HomePage() {
         ...b, ingredientId: id, nama: name,
         harga: saved ? String(saved.hargaPerKg) : (b.harga || String(ing?.hargaStandarPerKg ?? '')),
         stok: saved ? String(saved.stokKg) : b.stok,
-        kondisi: saved ? (KONDISI_DISPLAY[saved.kondisi] ?? 'Kering') : b.kondisi,
-        bentuk: saved?.bentuk ? (BENTUK_DISPLAY[saved.bentuk] ?? 'Sedang') : b.bentuk,
       } : b),
     }));
     setOpenBahan(null);
   };
-  const addBahan = () => { if (form.bahan.length >= 8) return; setForm(f => ({ ...f, bahan: [...f.bahan, { ingredientId: '', nama: '', stok: '', harga: '', kondisi: 'Kering', bentuk: 'Sedang' }] })); };
+  const addBahan = () => { if (form.bahan.length >= 8) return; setForm(f => ({ ...f, bahan: [...f.bahan, { ingredientId: '', nama: '', stok: '', harga: '' }] })); };
   const removeBahan = (idx: number) => { if (form.bahan.length <= 3) return; setForm(f => ({ ...f, bahan: f.bahan.filter((_, j) => j !== idx) })); setOpenBahan(null); };
   const toggleBahanDetail = (idx: number) => setOpenBahanDetails(d => ({ ...d, [idx]: !d[idx] }));
 
@@ -205,11 +197,11 @@ export default function HomePage() {
   if (screen === 'form') return (
     <FormScreen
       form={form} step={step} ingredients={ingredients}
-      computing={computing} apiError={apiError}
+      computing={computing} apiError={apiError} diagnosa={diagnosa}
       openBahan={openBahan} openBahanDetails={openBahanDetails}
       onGoDash={goDash} onPrevStep={prevStep} onNextStep={nextStep}
       onField={setField} onChoice={setChoice}
-      onBahanField={setBahanField} onBahanChoice={setBahanChoice}
+      onBahanField={setBahanField}
       onSelectIngredient={selectIngredient}
       onToggleMenu={setOpenBahan}
       onToggleDetail={toggleBahanDetail}
