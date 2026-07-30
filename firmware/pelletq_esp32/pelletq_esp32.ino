@@ -115,6 +115,7 @@ bool autoStartDone            = false;
 // Sensor
 float tempC        = 0.0f;
 bool  tcOpen       = false;          // thermocouple lepas
+bool  tempOverrideActive = false;    // true = tempC dikunci manual via serial "temp <v>"
 float tempSamples[5] = {0};
 int   sampleIdx    = 0;
 int   sampleCount  = 0;
@@ -142,6 +143,8 @@ unsigned long lastDisplayMs   = 0;
 // ============================================================================
 uint16_t readMax6675Raw();
 void readTemperature();
+void setTempOverride(float v);
+void clearTempOverride();
 void updateStateMachine();
 void updateDisplay();
 void handleMqtt();
@@ -251,6 +254,8 @@ uint16_t readMax6675Raw() {
 }
 
 void readTemperature() {
+  if (tempOverrideActive) return;    // suhu dikunci manual, jangan baca sensor
+
   uint16_t raw = readMax6675Raw();
 
   // Bit D2 = 1 -> thermocouple lepas
@@ -270,6 +275,18 @@ void readTemperature() {
   float sum = 0;
   for (int i = 0; i < sampleCount; i++) sum += tempSamples[i];
   tempC = sum / sampleCount;
+}
+
+void setTempOverride(float v) {
+  tempOverrideActive = true;
+  tcOpen = false;
+  tempC = v;
+  Serial.printf("[serial] temp override -> %.1f\n", v);
+}
+
+void clearTempOverride() {
+  tempOverrideActive = false;
+  Serial.println(F("[serial] temp override cleared, resuming MAX6675"));
 }
 
 // ============================================================================
