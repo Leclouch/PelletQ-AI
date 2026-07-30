@@ -632,6 +632,7 @@ void updateDisplay() {
   static int    prevMqtt    = -1;
   static String prevTarget  = "";
   static String prevSubNote = "";
+  static bool   prevOverride = false;  // untuk deteksi toggle tempOverrideActive
 
   bool full = false;
   if (state != prevState) {           // ganti state -> bersihkan body sekali
@@ -661,8 +662,9 @@ void updateDisplay() {
 
   // --- Suhu besar ---
   String tempStr = tcOpen ? "TC OPEN" : String(tempC, 1);
-  if (tempStr != prevTemp || full) {
+  if (tempStr != prevTemp || full || tempOverrideActive != prevOverride) {
     prevTemp = tempStr;
+    prevOverride = tempOverrideActive;
     tft.fillRect(0, 50, 480, 80, TFT_BLACK);
     uint16_t col = TFT_WHITE;
     if (tcOpen)                                        col = TFT_RED;
@@ -681,6 +683,16 @@ void updateDisplay() {
       tft.setFreeFont(&FreeSansBold18pt7b);
       tft.setTextDatum(ML_DATUM);
       tft.drawString("C", 332, 92);
+    }
+
+    // Indikator override manual (bench-test "temp <v>") — label terpisah di
+    // pojok kanan area suhu, area ini kosong (angka+lingkaran+"C" hanya
+    // menempati bagian tengah), jadi tidak ada risiko overflow/overlap.
+    if (tempOverrideActive) {
+      tft.setFreeFont(&FreeSansBold12pt7b);
+      tft.setTextDatum(MR_DATUM);
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      tft.drawString("OVERRIDE", 475, 60);
     }
   }
 
