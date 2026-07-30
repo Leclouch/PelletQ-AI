@@ -293,6 +293,7 @@ void clearTempOverride() {
 // STATE MACHINE
 // ============================================================================
 void enterState(State s) {
+  Serial.printf("[state] %s -> %s\n", stateName(state), stateName(s));
   state = s;
   switch (s) {
     case ST_IDLE:
@@ -390,11 +391,13 @@ void updateStateMachine() {
 void openHopper() {
   hopperServo.write(cfg.servoOpenAngle);
   servoStateStr = "OPEN";
+  Serial.printf("[servo] open angle=%d\n", cfg.servoOpenAngle);
 }
 
 void closeHopper() {
   hopperServo.write(cfg.servoCloseAngle);
   servoStateStr = "CLOSED";
+  Serial.printf("[servo] close angle=%d\n", cfg.servoCloseAngle);
 }
 
 // ============================================================================
