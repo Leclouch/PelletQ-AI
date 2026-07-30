@@ -152,6 +152,7 @@ void publishTelemetry();
 void publishEvent(const char* ev);
 void applyConfig(JsonDocument& doc);
 void handleCommand(const char* action);
+void handleSerialCommand();
 void openHopper();
 void closeHopper();
 void enterState(State s);
@@ -215,11 +216,34 @@ void setup() {
 }
 
 // ============================================================================
+// SERIAL COMMAND PARSER — bench-test interface
+// ============================================================================
+void handleSerialCommand() {
+  if (!Serial.available()) return;
+
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line.length() == 0) return;
+
+  Serial.printf("[serial] cmd: %s\n", line.c_str());
+
+  if (line == "temp auto") {
+    clearTempOverride();
+  } else if (line.startsWith("temp ")) {
+    float v = line.substring(5).toFloat();
+    setTempOverride(v);
+  } else {
+    handleCommand(line.c_str());   // start / open / close / reset
+  }
+}
+
+// ============================================================================
 // LOOP — orkestrasi murni, semua bergated interval millis
 // ============================================================================
 void loop() {
   unsigned long now = millis();
 
+  handleSerialCommand();   // bench-test: start/open/close/reset/temp via Serial
   handleMqtt();   // jaga koneksi WiFi/MQTT + mqtt.loop() (non-blocking)
 
   if (now - lastTempMs >= 1000) {         // baca suhu tiap 1 dtk
