@@ -46,10 +46,12 @@ telemetry payload.
 ## Testing
 Manual, via Serial Monitor @115200:
 1. Flash, confirm boot log + TFT shows IDLE, W/M dots red (no WiFi).
-2. Type `temp 96` → confirm display shows overridden temp, log shows no
-   further real MAX6675 reads.
+2. Type `temp 96` → confirm the TFT temperature display pins at 96.0 and stays
+   there across refreshes (there is no serial log of MAX6675 reads to check —
+   the frozen TFT value is the observable proxy for "not reading the sensor").
 3. Type `start` → confirm `[state] IDLE -> HEATING` then, since temp already
    ≥ threshold, `[state] HEATING -> MIXING` and a `THRESHOLD_REACHED` event.
-4. Type `open` / `close` → confirm `[servo]` logs and TFT servo status update.
+4. Type `open` / `close` → confirm `[servo] open angle=90` / `[servo] close
+   angle=0` in the serial log (there is no servo indicator on the TFT).
 5. Type `temp auto` → confirm real MAX6675 reads resume.
 6. Type `reset` → confirm return to IDLE.
