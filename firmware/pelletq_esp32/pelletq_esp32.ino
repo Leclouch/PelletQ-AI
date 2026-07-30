@@ -43,6 +43,16 @@
  *   MAX6675 dibaca MANUAL lewat hardware SPI yang sama (lihat readMax6675Raw).
  *   JANGAN pakai library MAX6675 bit-bang (software SPI) — pinMode/digitalWrite
  *   pada GPIO18 akan melepas pin dari peripheral SPI dan merusak TFT.
+ * ----------------------------------------------------------------------------
+ * BENCH TEST (serial, tanpa WiFi/MQTT) — ketik di Serial Monitor @115200:
+ *   start        - sama seperti command MQTT "start" (IDLE -> HEATING)
+ *   open         - sama seperti command MQTT "open"
+ *   close        - sama seperti command MQTT "close"
+ *   reset        - sama seperti command MQTT "reset" (paksa balik ke IDLE)
+ *   temp <v>     - override tempC ke <v> (bench-only, TIDAK ada di MQTT),
+ *                  contoh "temp 96" untuk memicu THRESHOLD_REACHED tanpa
+ *                  memanaskan thermocouple sungguhan
+ *   temp auto    - lepas override, lanjut baca MAX6675 asli
  * ============================================================================
  */
 
