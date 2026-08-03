@@ -53,6 +53,10 @@
  *                  contoh "temp 96" untuk memicu THRESHOLD_REACHED tanpa
  *                  memanaskan thermocouple sungguhan
  *   temp auto    - lepas override, lanjut baca MAX6675 asli
+ *   formulation <json> - sama seperti pesan MQTT retained "pelletq/formulation"
+ *                  (bench-only, TIDAK ada di MQTT command topic), contoh:
+ *                  formulation {"batchSizeKg":5,"totalBatches":2,"lastBatchKg":2,
+ *                  "ingredients":[{"name":"Tepung Ikan","kg":1.5}]}
  * ============================================================================
  */
 
@@ -265,6 +269,14 @@ void handleSerialCommand() {
   } else if (line.startsWith("temp ")) {
     float v = line.substring(5).toFloat();
     setTempOverride(v);
+  } else if (line.startsWith("formulation ")) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, line.substring(12));
+    if (err) {
+      Serial.printf("[serial] formulation JSON tidak valid: %s\n", err.c_str());
+    } else {
+      applyFormulation(doc);
+    }
   } else {
     handleCommand(line.c_str());   // start / open / close / reset
   }
