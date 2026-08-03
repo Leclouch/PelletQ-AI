@@ -679,8 +679,16 @@ const char* stateName(State s) {
 //   Header    : y   0..40   (statis, digambar di setup + indikator dinamis)
 //   Suhu      : y  50..130
 //   State     : y 138..183
-//   Countdown : y 188..268  (MM:SS + progress bar + sub-note)
-//   Banner    : y 272..320
+//   Countdown : y 188..268  (MM:SS + progress bar + sub-note)   [ST_MIXING]
+//   Banner    : y 272..320                                     [ST_ABORTED / suhu-turun warning]
+//   IDLE list : y 185..320  (batch info + hingga 4 baris ingridien +
+//               "+N lainnya", termasuk seluruh area Countdown & Banner di
+//               atas) — dipakai hanya saat ST_IDLE, lihat blok ST_IDLE di
+//               updateDisplay(). Baris ke-4 & marker overflow HARUS berhenti
+//               sebelum y301 (awal footer "Target: ..C") pada x0-105, karena
+//               footer itu digambar ulang tiap ~250ms terlepas dari state.
+//               Sebelum menambah drawString baru di region ini, cek dulu
+//               tabrakan dengan footer target & fillRect(0,300,200,20).
 // ----------------------------------------------------------------------------
 static uint16_t stateColor(State s) {
   switch (s) {
@@ -849,7 +857,10 @@ void updateDisplay() {
       tft.setTextDatum(TL_DATUM);
       tft.setTextColor(TFT_WHITE, TFT_BLACK);
       int rowY = 220;
-      int maxRows = 5;
+      // maxRows=4: baris terakhir jatuh di y274 (glyph ~y274-291), berhenti
+      // sebelum footer target (y301+) di x0-105 — lihat catatan region layout
+      // di atas. JANGAN naikkan lagi tanpa menghitung ulang batas footer.
+      int maxRows = 4;
       int shown = (ingredientCount < maxRows) ? ingredientCount : maxRows;
       for (int i = 0; i < shown; i++) {
         char row[40];
@@ -862,7 +873,10 @@ void updateDisplay() {
         char more[24];
         snprintf(more, sizeof(more), "+%d lainnya", ingredientCount - shown);
         tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-        tft.drawString(more, 20, rowY);
+        // Digambar di x300 (bukan x20) supaya di luar jangkauan x footer
+        // target (x0-105) / fillRect clear-nya (x0-200) meski y-nya (292)
+        // sama dengan baris ke-5 yang lama.
+        tft.drawString(more, 300, rowY);
       }
     }
   }
@@ -894,11 +908,11 @@ void updateDisplay() {
       tft.setTextColor(TFT_BLACK, TFT_YELLOW);
       tft.drawString("SUHU TURUN > 1 MENIT - PERIKSA MESIN", 240, 296);
     } else if (state == ST_IDLE) {
-      // Saat IDLE, blok ST_IDLE di atas (baris ~830) SUDAH membersihkan
+      // Saat IDLE, blok ST_IDLE di atas (baris ~838) SUDAH membersihkan
       // y185-320 sekaligus (termasuk seluruh area banner y272-320) sebelum
       // menggambar batch info + baris ingridien di panggilan yang sama —
-      // JANGAN fillRect lagi di sini, atau baris ke-4/5 (y274/y292) dan baris
-      // "+N lainnya" (y310) akan tertimpa hitam persis setelah digambar.
+      // JANGAN fillRect lagi di sini, atau baris ke-4 (y274) dan marker
+      // "+N lainnya" (y292, x300) akan tertimpa hitam persis setelah digambar.
       prevTarget = "";
     } else {
       tft.fillRect(0, 272, 480, 48, TFT_BLACK);

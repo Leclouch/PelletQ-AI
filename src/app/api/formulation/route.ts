@@ -343,23 +343,16 @@ export async function POST(req: NextRequest) {
     };
 
     // Kirim ke ESP32 via MQTT (retained) — best-effort, tidak boleh
-    // menggagalkan response API kalau broker/ESP32 tidak terjangkau.
-    // Dibungkus timeout: mqtt.js meng-antre publish QoS 0 saat client belum
-    // terkoneksi dan baru memanggil callback setelah pesan benar-benar
-    // terkirim, jadi tanpa timeout ini, broker yang mati akan membuat
-    // response API menggantung tanpa batas alih-alih gagal cepat.
+    // menggagalkan response API kalau broker/ESP32 tidak terjangkau atau
+    // MQTT_BROKER_URL belum di-set. Timeout & fallback konfigurasi sudah
+    // ditangani di dalam publishRetained().
     try {
-      await Promise.race([
-        publishRetained("pelletq/formulation", {
-          batchSizeKg: batchInfo.batchSizeKg,
-          totalBatches: batchInfo.jumlahBatchPenuh + (batchInfo.sisaKg > 0 ? 1 : 0),
-          lastBatchKg: batchInfo.sisaKg,
-          ingredients: resepPerBatch.map((r) => ({ name: r.name, kg: r.jumlahKg })),
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("MQTT publish timeout setelah 3s")), 3000)
-        ),
-      ]);
+      await publishRetained("pelletq/formulation", {
+        batchSizeKg: batchInfo.batchSizeKg,
+        totalBatches: batchInfo.jumlahBatchPenuh + (batchInfo.sisaKg > 0 ? 1 : 0),
+        lastBatchKg: batchInfo.sisaKg,
+        ingredients: resepPerBatch.map((r) => ({ name: r.name, kg: r.jumlahKg })),
+      });
     } catch (err) {
       console.error("[formulation] MQTT publish gagal:", err);
     }
