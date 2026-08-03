@@ -67,6 +67,27 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
 
   WiFi.mode(WIFI_STA);
+  delay(100);
+
+  // --- Diagnostic scan: is the target SSID even visible to the ESP32? ---
+  Serial.println(F("[scan] scanning for networks..."));
+  int n = WiFi.scanNetworks();
+  Serial.printf("[scan] found %d networks:\n", n);
+  bool targetSeen = false;
+  for (int i = 0; i < n; i++) {
+    bool match = (WiFi.SSID(i) == WIFI_SSID);
+    if (match) targetSeen = true;
+    Serial.printf("  %2d) %-24s ch=%2d rssi=%d enc=%d%s\n",
+                  i, WiFi.SSID(i).c_str(), WiFi.channel(i),
+                  WiFi.RSSI(i), (int)WiFi.encryptionType(i),
+                  match ? "  <-- TARGET" : "");
+  }
+  if (targetSeen)
+    Serial.printf("[scan] target \"%s\" IS visible -> if it still fails, PASSWORD is wrong\n", WIFI_SSID);
+  else
+    Serial.printf("[scan] target \"%s\" NOT visible -> wrong SSID name, 5GHz, or out of range\n", WIFI_SSID);
+  WiFi.scanDelete();
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
@@ -82,7 +103,10 @@ void ensureConnected() {
   if (WiFi.status() != WL_CONNECTED) {
     if (now - lastRetry >= 5000) {
       lastRetry = now;
-      Serial.printf("[wifi] connecting to \"%s\" ...\n", WIFI_SSID);
+      // status: 1=NO_SSID_AVAIL(name/band/range) 4=CONNECT_FAILED(wrong pw)
+      //         6=DISCONNECTED(still trying) 3=CONNECTED
+      Serial.printf("[wifi] connecting to \"%s\" ... status=%d\n",
+                    WIFI_SSID, WiFi.status());
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     }

@@ -5,6 +5,12 @@ import { solveFormulation, diagnoseInfeasibility, type LPIngredientInput } from 
 import { validateSni } from "@/lib/sni-validator";
 import { computeMachineParams, type RuleParams } from "@/lib/rule-engine";
 import { BATCH_KG, PHASE_DIAMETER_MM } from "@/lib/constants";
+import {
+  explainFormulation,
+  explainInfeasible,
+  type FormulationResult,
+  type InfeasibleDiagnostic,
+} from "@/lib/gemini-explainer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,11 +126,32 @@ export async function POST(req: NextRequest) {
         patiMinPctTerapung,
         targetProduksiKgBatch
       );
+
+      const diagnostic: InfeasibleDiagnostic = {
+        fase: phase,
+        jumlahBahanTersedia: lpIngredients.length,
+        konstrainBermasalah: diagnosa.map((d) => ({
+          parameter: d.jenis,
+          target: d.severity,
+          keterangan: d.rekomendasi,
+        })),
+        saranSistem: diagnosa.map((d) => d.rekomendasi),
+      };
+
+      let penjelasan: string | null = null;
+      try {
+        penjelasan = await explainInfeasible(diagnostic);
+      } catch (err) {
+        console.error("[formulation] explainInfeasible failed:", err);
+      }
+
       return NextResponse.json(
         {
           error: "Formulasi belum memenuhi standar SNI.",
           saran: diagnosa.map((d) => d.rekomendasi).join(" "),
           diagnosa,
+          diagnostic,
+          penjelasan,
         },
         { status: 422 }
       );
@@ -146,6 +173,38 @@ export async function POST(req: NextRequest) {
         floatingRateMinPct: Number(sniStandard.floatingRateMinPct),
       }
     );
+
+    const formulationResultForExplainer: FormulationResult = {
+      fase: phase,
+      komposisi: lpResult.ingredients.map((ing) => ({
+        namaBahan: ing.name,
+        persentase: ing.persentase,
+      })),
+      nutrisi: {
+        protein: lpResult.estimasi.proteinPct,
+        lemak: lpResult.estimasi.lemakPct,
+        seratKasar: lpResult.estimasi.seratKasarPct,
+        kadarAir: lpResult.estimasi.kadarAirPct,
+        abu: lpResult.estimasi.abuPct,
+      },
+      biayaPerKg: Math.round(lpResult.totalBiayaRp / targetProduksiKgBatch),
+      sniStatus: {
+        compliant: validasi.statusKeseluruhan === "SESUAI",
+        detail: validasi.items.map((i) => ({
+          parameter: i.parameter,
+          nilai: i.nilai,
+          syarat: i.batasSni,
+          lolos: i.status === "SESUAI",
+        })),
+      },
+    };
+
+    let penjelasan: string | null = null;
+    try {
+      penjelasan = await explainFormulation(formulationResultForExplainer);
+    } catch (err) {
+      console.error("[formulation] explainFormulation failed:", err);
+    }
 
     // 5. Rule-Based AI — Parameter Mesin
     // Definisi binder/pati selaras dengan constraint LP: binder = bahan
@@ -292,6 +351,7 @@ export async function POST(req: NextRequest) {
       validasiSni: validasi,
       parameterMesin: ruleResult.machineParams,
       peringatan: ruleResult.warnings,
+      penjelasan,
     });
   } catch (error: any) {
     console.error("Formulation API error:", error);

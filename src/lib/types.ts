@@ -92,6 +92,7 @@ export interface ApiResult {
     severity: 'INFO' | 'WARNING' | 'CRITICAL';
     rekomendasi: string;
   }>;
+  penjelasan: string | null;
 }
 
 export interface Diagnosa {

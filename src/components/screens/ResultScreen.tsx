@@ -50,6 +50,17 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
           </div>
         </div>
 
+        {/* Penjelasan AI (opsional — hanya tampil bila Gemini berhasil menjawab) */}
+        {res.penjelasan && (
+          <div style={{ display: 'flex', gap: 11, padding: 16, borderRadius: 18, background: '#F3EEFB', border: '1px solid #D6C6EF' }}>
+            <span style={{ flexShrink: 0, fontSize: 18, lineHeight: 1.3 }}>✨</span>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6A4E9E', marginBottom: 4 }}>Penjelasan AI</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.55, color: '#4A3B6B' }}>{res.penjelasan}</div>
+            </div>
+          </div>
+        )}
+
         {/* Komposisi */}
         <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>

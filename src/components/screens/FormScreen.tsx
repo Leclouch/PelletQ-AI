@@ -15,6 +15,7 @@ interface FormScreenProps {
   computing: boolean;
   apiError: string | null;
   diagnosa: Diagnosa[] | null;
+  penjelasanGagal: string | null;
   openBahan: number | null;
   openBahanDetails: Record<number, boolean>;
   onGoDash: () => void;
@@ -34,7 +35,7 @@ interface FormScreenProps {
 const STEP_TITLES = ['Data Ikan', 'Bahan Baku', 'Ringkasan'];
 
 export default function FormScreen({
-  form, step, ingredients, computing, apiError, diagnosa,
+  form, step, ingredients, computing, apiError, diagnosa, penjelasanGagal,
   openBahan, openBahanDetails,
   onGoDash, onPrevStep, onNextStep, onField, onChoice,
   onBahanField, onSelectIngredient,
@@ -71,7 +72,7 @@ export default function FormScreen({
             onCloseMenus={onCloseMenus}
           />
         )}
-        {step === 3 && <Step3Summary form={form} onField={onField} apiError={apiError} diagnosa={diagnosa} />}
+        {step === 3 && <Step3Summary form={form} onField={onField} apiError={apiError} diagnosa={diagnosa} penjelasanGagal={penjelasanGagal} />}
       </div>
 
       <StickyFooter>

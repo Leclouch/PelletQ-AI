@@ -26,6 +26,7 @@ export default function HomePage() {
   const [fishSpeciesId, setFishSpeciesId] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
   const [diagnosa, setDiagnosa] = useState<Diagnosa[] | null>(null);
+  const [penjelasanGagal, setPenjelasanGagal] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('pelletq-riwayat');
@@ -65,7 +66,7 @@ export default function HomePage() {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
-  const goDash = () => { setScreen('dashboard'); setApiError(null); setDiagnosa(null); };
+  const goDash = () => { setScreen('dashboard'); setApiError(null); setDiagnosa(null); setPenjelasanGagal(null); };
   const goIngredients = () => setScreen('ingredients');
 
   const startForm = () => {
@@ -75,6 +76,7 @@ export default function HomePage() {
     setScreen('form');
     setApiError(null);
     setDiagnosa(null);
+    setPenjelasanGagal(null);
   };
 
   const prevStep = () => {
@@ -93,7 +95,7 @@ export default function HomePage() {
     if (validBahan.length < 3) { setApiError('Minimal 3 bahan baku harus dipilih.'); return; }
     if (!fishSpeciesId) { setApiError('Data spesies belum termuat. Coba refresh halaman.'); return; }
 
-    setComputing(true); setApiError(null); setDiagnosa(null);
+    setComputing(true); setApiError(null); setDiagnosa(null); setPenjelasanGagal(null);
 
     const body = {
       fishSpeciesId,
@@ -112,7 +114,13 @@ export default function HomePage() {
     try {
       const res = await fetch('/api/formulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { setApiError(data.saran || data.error || 'Terjadi kesalahan.'); setDiagnosa(data.diagnosa ?? null); setComputing(false); return; }
+      if (!res.ok) {
+        setApiError(data.saran || data.error || 'Terjadi kesalahan.');
+        setDiagnosa(data.diagnosa ?? null);
+        setPenjelasanGagal(data.penjelasan ?? null);
+        setComputing(false);
+        return;
+      }
 
       const result = data as ApiResult;
       const targetKg = parseFloat(form.targetProduksi) || 25;
@@ -197,7 +205,7 @@ export default function HomePage() {
   if (screen === 'form') return (
     <FormScreen
       form={form} step={step} ingredients={ingredients}
-      computing={computing} apiError={apiError} diagnosa={diagnosa}
+      computing={computing} apiError={apiError} diagnosa={diagnosa} penjelasanGagal={penjelasanGagal}
       openBahan={openBahan} openBahanDetails={openBahanDetails}
       onGoDash={goDash} onPrevStep={prevStep} onNextStep={nextStep}
       onField={setField} onChoice={setChoice}
