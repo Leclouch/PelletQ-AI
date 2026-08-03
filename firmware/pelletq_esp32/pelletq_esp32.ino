@@ -827,6 +827,41 @@ void updateDisplay() {
       tft.setTextColor(TFT_WHITE, TFT_BLACK);
       tft.drawString(remStr, 240, 238);
     }
+  } else if (state == ST_IDLE && (full || formulationDirty)) {
+    formulationDirty = false;
+    tft.fillRect(0, 185, 480, 125, TFT_BLACK);
+
+    if (ingredientCount > 0) {
+      char batchStr[24];
+      snprintf(batchStr, sizeof(batchStr), "Batch %d/%d", currentBatch, totalBatches);
+      tft.setFreeFont(&FreeSansBold12pt7b);
+      tft.setTextDatum(TC_DATUM);
+      tft.setTextColor(TFT_CYAN, TFT_BLACK);
+      tft.drawString(batchStr, 240, 188);
+
+      bool  isLastPartial = (currentBatch == totalBatches) && (lastBatchKg > 0) && (batchSizeKg > 0);
+      float scale = isLastPartial ? (lastBatchKg / batchSizeKg) : 1.0f;
+
+      tft.setFreeFont(&FreeSans9pt7b);
+      tft.setTextDatum(TL_DATUM);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      int rowY = 220;
+      int maxRows = 5;
+      int shown = (ingredientCount < maxRows) ? ingredientCount : maxRows;
+      for (int i = 0; i < shown; i++) {
+        char row[40];
+        snprintf(row, sizeof(row), "%-18s %5.2f kg",
+                 formulationIngredients[i].name, formulationIngredients[i].kg * scale);
+        tft.drawString(row, 20, rowY);
+        rowY += 18;
+      }
+      if (ingredientCount > shown) {
+        char more[24];
+        snprintf(more, sizeof(more), "+%d lainnya", ingredientCount - shown);
+        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.drawString(more, 20, rowY);
+      }
+    }
   }
 
   // --- Target aktif (pojok kiri bawah, di atas banner) ---
