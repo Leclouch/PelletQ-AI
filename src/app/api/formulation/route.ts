@@ -11,6 +11,7 @@ import {
   type FormulationResult,
   type InfeasibleDiagnostic,
 } from "@/lib/gemini-explainer";
+import { publishRetained } from "@/lib/mqtt";
 
 export async function POST(req: NextRequest) {
   try {
@@ -335,6 +336,34 @@ export async function POST(req: NextRequest) {
       jumlahKg: Math.round((ing.persentase / 100) * batchSizeKg * 1000) / 1000,
     }));
 
+    const batchInfo = {
+      batchSizeKg,
+      jumlahBatchPenuh: Math.floor(targetProduksiKgBatch / BATCH_KG),
+      sisaKg: Math.round((targetProduksiKgBatch % BATCH_KG) * 1000) / 1000,
+    };
+
+    // Kirim ke ESP32 via MQTT (retained) — best-effort, tidak boleh
+    // menggagalkan response API kalau broker/ESP32 tidak terjangkau.
+    // Dibungkus timeout: mqtt.js meng-antre publish QoS 0 saat client belum
+    // terkoneksi dan baru memanggil callback setelah pesan benar-benar
+    // terkirim, jadi tanpa timeout ini, broker yang mati akan membuat
+    // response API menggantung tanpa batas alih-alih gagal cepat.
+    try {
+      await Promise.race([
+        publishRetained("pelletq/formulation", {
+          batchSizeKg: batchInfo.batchSizeKg,
+          totalBatches: batchInfo.jumlahBatchPenuh + (batchInfo.sisaKg > 0 ? 1 : 0),
+          lastBatchKg: batchInfo.sisaKg,
+          ingredients: resepPerBatch.map((r) => ({ name: r.name, kg: r.jumlahKg })),
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("MQTT publish timeout setelah 3s")), 3000)
+        ),
+      ]);
+    } catch (err) {
+      console.error("[formulation] MQTT publish gagal:", err);
+    }
+
     return NextResponse.json({
       formulationId: formulation.id,
       formulasi: {
@@ -342,11 +371,7 @@ export async function POST(req: NextRequest) {
         totalBiayaRp: lpResult.totalBiayaRp,
         estimasiNutrisi: lpResult.estimasi,
       },
-      batchInfo: {
-        batchSizeKg,
-        jumlahBatchPenuh: Math.floor(targetProduksiKgBatch / BATCH_KG),
-        sisaKg: Math.round((targetProduksiKgBatch % BATCH_KG) * 1000) / 1000,
-      },
+      batchInfo,
       resepPerBatch,
       validasiSni: validasi,
       parameterMesin: ruleResult.machineParams,
