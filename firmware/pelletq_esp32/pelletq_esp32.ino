@@ -86,13 +86,14 @@
 // ============================================================================
 // MQTT TOPICS
 // ============================================================================
-#define MQTT_CLIENT_ID   "pelletq-esp32"
-#define TOPIC_TELEMETRY  "pelletq/telemetry"
-#define TOPIC_COMMAND    "pelletq/command"
-#define TOPIC_CONFIG     "pelletq/config"
-#define TOPIC_CONFIG_ACK "pelletq/config/ack"
-#define TOPIC_EVENT      "pelletq/event"
-#define TOPIC_STATUS     "pelletq/status"   // LWT retained
+#define MQTT_CLIENT_ID     "pelletq-esp32"
+#define TOPIC_TELEMETRY    "pelletq/telemetry"
+#define TOPIC_COMMAND      "pelletq/command"
+#define TOPIC_CONFIG       "pelletq/config"
+#define TOPIC_CONFIG_ACK   "pelletq/config/ack"
+#define TOPIC_FORMULATION  "pelletq/formulation"
+#define TOPIC_EVENT        "pelletq/event"
+#define TOPIC_STATUS       "pelletq/status"   // LWT retained
 
 // ============================================================================
 // KONFIGURASI (default hardcoded — dipakai hanya jika belum ada retained config)
@@ -107,6 +108,24 @@ struct Config {
   int   servoCloseAngle= 0;       // sudut servo saat tutup
   bool  autoStart      = false;   // otomatis HEATING saat boot?
 } cfg;
+
+// ============================================================================
+// FORMULASI (diterima via MQTT retained "pelletq/formulation" atau bench
+// serial "formulation <json>") — kg per ingridien untuk SATU batch penuh;
+// batch terakhir (jika lastBatchKg > 0) di-skalakan di sisi ESP32.
+// ============================================================================
+#define MAX_INGREDIENTS 12
+struct Ingredient {
+  char  name[20];
+  float kg;
+};
+Ingredient formulationIngredients[MAX_INGREDIENTS];
+int   ingredientCount   = 0;
+float batchSizeKg       = 0;
+int   totalBatches      = 0;
+float lastBatchKg       = 0;      // 0 = semua batch ukuran penuh
+int   currentBatch      = 1;      // 1-indexed, direset saat formulasi baru masuk
+bool  formulationDirty  = false;  // true = layar IDLE perlu digambar ulang
 
 // ============================================================================
 // STATE MACHINE
@@ -161,6 +180,8 @@ void handleMqtt();
 void publishTelemetry();
 void publishEvent(const char* ev);
 void applyConfig(JsonDocument& doc);
+void applyFormulation(JsonDocument& doc);
+void advanceBatch();
 void handleCommand(const char* action);
 void handleSerialCommand();
 void openHopper();
@@ -210,7 +231,7 @@ void setup() {
 
   // MQTT
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
-  mqtt.setBufferSize(512);
+  mqtt.setBufferSize(1024);
   mqtt.setCallback([](char* topic, byte* payload, unsigned int len) {
     JsonDocument doc;
     if (deserializeJson(doc, payload, len)) return;   // JSON invalid -> abaikan
@@ -219,6 +240,8 @@ void setup() {
     } else if (strcmp(topic, TOPIC_COMMAND) == 0) {
       const char* action = doc["action"];
       if (action) handleCommand(action);
+    } else if (strcmp(topic, TOPIC_FORMULATION) == 0) {
+      applyFormulation(doc);
     }
   });
 
@@ -406,6 +429,7 @@ void updateStateMachine() {
       if ((long)(dispenseEndMs - now) <= 0) {
         closeHopper();
         publishEvent("CYCLE_COMPLETE");
+        advanceBatch();
         enterState(ST_IDLE);
       }
       break;
@@ -448,6 +472,7 @@ void handleCommand(const char* action) {
     closeHopper();
     if (state == ST_DISPENSING) {   // batalkan sisa timer buka
       publishEvent("CYCLE_COMPLETE");
+      advanceBatch();
       enterState(ST_IDLE);
     }
 
@@ -501,6 +526,38 @@ void applyConfig(JsonDocument& doc) {
   if (mqtt.connected()) mqtt.publish(TOPIC_CONFIG_ACK, (const uint8_t*)buf, n, false);
 }
 
+void applyFormulation(JsonDocument& doc) {
+  batchSizeKg  = doc["batchSizeKg"]  | 0.0f;
+  totalBatches = doc["totalBatches"] | 0;
+  lastBatchKg  = doc["lastBatchKg"]  | 0.0f;
+  currentBatch = 1;
+
+  ingredientCount = 0;
+  JsonArray arr = doc["ingredients"].as<JsonArray>();
+  for (JsonObject item : arr) {
+    if (ingredientCount >= MAX_INGREDIENTS) {
+      Serial.println(F("[formulation] jumlah ingridien melebihi MAX_INGREDIENTS, sisanya dibuang"));
+      break;
+    }
+    const char* name = item["name"] | "?";
+    strncpy(formulationIngredients[ingredientCount].name, name,
+            sizeof(formulationIngredients[ingredientCount].name) - 1);
+    formulationIngredients[ingredientCount].name[sizeof(formulationIngredients[ingredientCount].name) - 1] = '\0';
+    formulationIngredients[ingredientCount].kg = item["kg"] | 0.0f;
+    ingredientCount++;
+  }
+
+  formulationDirty = true;
+  Serial.printf("[formulation] %d ingridien, batchSizeKg=%.2f totalBatches=%d lastBatchKg=%.2f\n",
+                ingredientCount, batchSizeKg, totalBatches, lastBatchKg);
+}
+
+void advanceBatch() {
+  if (currentBatch < totalBatches) currentBatch++;
+  formulationDirty = true;
+  Serial.printf("[formulation] batch -> %d/%d\n", currentBatch, totalBatches);
+}
+
 // ============================================================================
 // MQTT
 // ============================================================================
@@ -542,6 +599,7 @@ void handleMqtt() {
         mqtt.publish(TOPIC_STATUS, "online", true);
         mqtt.subscribe(TOPIC_CONFIG);        // retained -> config terakhir masuk
         mqtt.subscribe(TOPIC_COMMAND);
+        mqtt.subscribe(TOPIC_FORMULATION);   // retained -> formulasi terakhir masuk
         mqttOk = true;
         wasMqtt = true;
         Serial.println(F("[mqtt] connected"));
