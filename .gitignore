@@ -25,6 +25,7 @@
 *.pem
 .claude/
 .superpowers/
+.worktrees/
 
 # debug
 npm-debug.log*
@@ -48,3 +49,4 @@ test/cookies.txt
 
 .claude/
 .superpowers/
+.worktrees/
