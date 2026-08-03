@@ -829,7 +829,10 @@ void updateDisplay() {
     }
   } else if (state == ST_IDLE && (full || formulationDirty)) {
     formulationDirty = false;
-    tft.fillRect(0, 185, 480, 125, TFT_BLACK);
+    // Tinggi 135 (bukan 125) supaya y185-320 tercakup penuh, termasuk area
+    // banner (y272-320) di bawahnya — lihat catatan di blok banner: ini
+    // mencegah fillRect banner menimpa baris ingridien yang baru digambar.
+    tft.fillRect(0, 185, 480, 135, TFT_BLACK);
 
     if (ingredientCount > 0) {
       char batchStr[24];
@@ -890,6 +893,13 @@ void updateDisplay() {
       tft.setTextDatum(MC_DATUM);
       tft.setTextColor(TFT_BLACK, TFT_YELLOW);
       tft.drawString("SUHU TURUN > 1 MENIT - PERIKSA MESIN", 240, 296);
+    } else if (state == ST_IDLE) {
+      // Saat IDLE, blok ST_IDLE di atas (baris ~830) SUDAH membersihkan
+      // y185-320 sekaligus (termasuk seluruh area banner y272-320) sebelum
+      // menggambar batch info + baris ingridien di panggilan yang sama —
+      // JANGAN fillRect lagi di sini, atau baris ke-4/5 (y274/y292) dan baris
+      // "+N lainnya" (y310) akan tertimpa hitam persis setelah digambar.
+      prevTarget = "";
     } else {
       tft.fillRect(0, 272, 480, 48, TFT_BLACK);
       // gambar ulang target kecil karena banner bersih menimpa area bawah
