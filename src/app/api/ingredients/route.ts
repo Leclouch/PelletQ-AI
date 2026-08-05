@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function GET() {
   const ingredients = await prisma.ingredient.findMany({
@@ -22,6 +24,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  const forbidden = requireAdmin(session);
+  if (forbidden) return forbidden;
+
   const body = await req.json();
   const { name, proteinPct, lemakPct, seratKasarPct, abuPct, kadarAirPct, karakterBahan, hargaStandarPerKg } = body;
 
@@ -59,6 +65,7 @@ export async function POST(req: NextRequest) {
     if (e.code === 'P2002') {
       return NextResponse.json({ error: 'Nama bahan sudah ada.' }, { status: 409 });
     }
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error('[ingredients] POST gagal:', e);
+    return NextResponse.json({ error: 'Terjadi kesalahan pada server.' }, { status: 500 });
   }
 }

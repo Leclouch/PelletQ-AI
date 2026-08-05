@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-
-const DEV_EMAIL = 'dev@pelletq.local';
-
-async function getDevUser() {
-  return prisma.user.findUnique({ where: { email: DEV_EMAIL } });
-}
+import { auth } from '@/auth';
 
 export async function GET() {
-  const user = await getDevUser();
-  if (!user) return NextResponse.json({ error: 'User tidak ditemukan.' }, { status: 404 });
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const availability = await prisma.userIngredientAvailability.findMany({
-    where: { userId: user.id },
+    where: { userId: session.user.id },
     orderBy: { updatedAt: 'desc' },
   });
 
@@ -30,15 +27,17 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getDevUser();
-  if (!user) return NextResponse.json({ error: 'User tidak ditemukan.' }, { status: 404 });
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { ingredientId, stokKg, hargaPerKg, kondisi, bentuk } = await req.json();
 
   const record = await prisma.userIngredientAvailability.upsert({
-    where: { userId_ingredientId: { userId: user.id, ingredientId } },
+    where: { userId_ingredientId: { userId: session.user.id, ingredientId } },
     update: { stokKg, hargaPerKg, kondisi, bentuk: bentuk ?? null },
-    create: { userId: user.id, ingredientId, stokKg, hargaPerKg, kondisi, bentuk: bentuk ?? null },
+    create: { userId: session.user.id, ingredientId, stokKg, hargaPerKg, kondisi, bentuk: bentuk ?? null },
   });
 
   return NextResponse.json({

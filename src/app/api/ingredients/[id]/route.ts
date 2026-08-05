@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  const forbidden = requireAdmin(session);
+  if (forbidden) return forbidden;
+
   const { id } = await params;
   const body = await req.json();
 
@@ -33,13 +39,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   } catch (e: any) {
     if (e.code === 'P2002') return NextResponse.json({ error: 'Nama bahan sudah ada.' }, { status: 409 });
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error('[ingredients] PUT gagal:', e);
+    return NextResponse.json({ error: 'Terjadi kesalahan pada server.' }, { status: 500 });
   }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const session = await auth();
+  const forbidden = requireAdmin(session);
+  if (forbidden) return forbidden;
 
+  const { id } = await params;
   const used = await prisma.formulationIngredient.findFirst({ where: { ingredientId: id } });
 
   if (used) {
