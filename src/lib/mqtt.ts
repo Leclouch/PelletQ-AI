@@ -10,7 +10,11 @@ const globalForMqtt = globalThis as unknown as {
 };
 
 function createMqttClient(url: string): MqttClient {
-  return mqtt.connect(url, { reconnectPeriod: 5000 });
+  return mqtt.connect(url, {
+    reconnectPeriod: 5000,
+    username: process.env.MQTT_USERNAME,
+    password: process.env.MQTT_PASSWORD,
+  });
 }
 
 // Dibuat lazy (baru dipanggil dari publishRetained), BUKAN di module scope.
