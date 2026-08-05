@@ -1,7 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
 // Config ringan tanpa runtime Prisma — aman dijalankan di Edge runtime
-// (dipakai oleh middleware.ts, lihat NextAuth(authConfig) di sana). Provider
+// (dipakai oleh src/proxy.ts, lihat NextAuth(authConfig) di sana). Provider
 // penuh (Credentials + bcrypt + Prisma) diisi di src/auth.ts.
 export const authConfig = {
   pages: {
