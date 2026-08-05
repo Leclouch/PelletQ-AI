@@ -22,6 +22,7 @@ export const authConfig = {
     },
     session({ session, token }) {
       if (token.id) {
+        // JWT extends Record<string, unknown> — tipe cast diperlukan untuk narrowing id & role.
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
       }
