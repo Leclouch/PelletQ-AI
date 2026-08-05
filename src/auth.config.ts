@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import type { NextAuthConfig } from "next-auth";
 
-// Config ringan TANPA import Prisma — aman dijalankan di Edge runtime
-// (dipakai oleh middleware.ts). Provider penuh diisi di src/auth.ts.
+// Config ringan tanpa runtime Prisma — aman dijalankan di Edge runtime
+// (dipakai oleh middleware.ts, lihat NextAuth(authConfig) di sana). Provider
+// penuh (Credentials + bcrypt + Prisma) diisi di src/auth.ts.
 export const authConfig = {
   pages: {
     signIn: "/login",
@@ -12,25 +12,17 @@ export const authConfig = {
   },
   providers: [],
   callbacks: {
-    // Dipakai middleware: hanya user yang sudah login boleh mengakses.
-    authorized({ auth, request }) {
-      if (auth?.user) return true;
-      // Route API → balas 401 JSON (klien programatik butuh status, bukan
-      // redirect HTML). Halaman biasa → false, Auth.js redirect ke /login.
-      if (request.nextUrl.pathname.startsWith("/api")) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      return false;
-    },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.role = user.role;
       }
       return token;
     },
     session({ session, token }) {
       if (token.id) {
         session.user.id = token.id as string;
+        session.user.role = token.role;
       }
       return session;
     },
