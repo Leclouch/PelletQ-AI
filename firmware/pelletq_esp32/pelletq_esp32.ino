@@ -68,12 +68,10 @@
 #include <ArduinoJson.h>
 
 // ============================================================================
-// KREDENSIAL — GANTI SEBELUM UPLOAD
+// KREDENSIAL — lihat secrets.h (di-gitignore). Copy dari secrets.h.example
+// lalu isi WIFI_SSID/WIFI_PASSWORD/MQTT_BROKER/MQTT_PORT sebelum upload.
 // ============================================================================
-#define WIFI_SSID      "GANTI_SSID"
-#define WIFI_PASSWORD  "GANTI_PASSWORD"
-#define MQTT_BROKER    "192.168.1.100"   // GANTI_IP broker Mosquitto
-#define MQTT_PORT      1883
+#include "secrets.h"
 
 // ============================================================================
 // PIN MAP

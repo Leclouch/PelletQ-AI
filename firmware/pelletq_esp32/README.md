@@ -39,14 +39,23 @@ di TFT, dan berkomunikasi via MQTT.
 
 ## Sebelum upload
 
-Edit `#define` di bagian atas `pelletq_esp32.ino`:
+Kredensial WiFi/MQTT ada di `secrets.h` (di-gitignore, tidak ikut commit). Copy dari
+template lalu isi nilai asli:
+
+```bash
+cp secrets.h.example secrets.h
+```
 
 ```cpp
+// secrets.h
 #define WIFI_SSID      "GANTI_SSID"
 #define WIFI_PASSWORD  "GANTI_PASSWORD"
 #define MQTT_BROKER    "192.168.1.100"   // IP broker Mosquitto
 #define MQTT_PORT      1883
 ```
+
+> Arduino IDE juga membaca `secrets.h` selama filenya ada di folder sketch yang sama
+> (satu folder dengan `pelletq_esp32.ino`) — tidak perlu langkah tambahan.
 
 ## Build — Opsi A: PlatformIO (direkomendasikan)
 

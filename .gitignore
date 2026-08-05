@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# firmware secrets (WiFi/MQTT credentials)
+firmware/**/secrets.h
+
 # vercel
 .vercel
 
