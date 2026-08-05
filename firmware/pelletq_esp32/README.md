@@ -50,8 +50,10 @@ cp secrets.h.example secrets.h
 // secrets.h
 #define WIFI_SSID      "GANTI_SSID"
 #define WIFI_PASSWORD  "GANTI_PASSWORD"
-#define MQTT_BROKER    "192.168.1.100"   // IP broker Mosquitto
-#define MQTT_PORT      1883
+#define MQTT_BROKER    "192.168.1.100"   // domain/IP publik broker (listener TLS, lihat Task 7)
+#define MQTT_PORT      8883              // listener TLS (bukan 1883 plain)
+#define MQTT_USERNAME  "GANTI_USERNAME"
+#define MQTT_PASSWORD  "GANTI_PASSWORD"
 ```
 
 > Arduino IDE juga membaca `secrets.h` selama filenya ada di folder sketch yang sama

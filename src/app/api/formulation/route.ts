@@ -62,14 +62,23 @@ export async function POST(req: NextRequest) {
       where: { id: { in: ingredientIds } },
     });
 
+    const missingIngredient = (bahanBaku as { ingredientId: string }[]).find(
+      (b) => !dbIngredients.some((d) => d.id === b.ingredientId)
+    );
+    if (missingIngredient) {
+      return NextResponse.json(
+        { error: `Bahan ${missingIngredient.ingredientId} tidak ditemukan di database.` },
+        { status: 400 }
+      );
+    }
+
     const lpIngredients: LPIngredientInput[] = bahanBaku.map(
       (b: {
         ingredientId: string;
         stokKg: number;
         hargaPerKg: number;
       }) => {
-        const dbIng = dbIngredients.find((d) => d.id === b.ingredientId);
-        if (!dbIng) throw new Error(`Bahan ${b.ingredientId} tidak ditemukan di database.`);
+        const dbIng = dbIngredients.find((d) => d.id === b.ingredientId)!;
         return {
           ingredientId: dbIng.id,
           name: dbIng.name,
@@ -374,7 +383,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Formulation API error:", error);
     return NextResponse.json(
-      { error: error.message || "Terjadi kesalahan pada server." },
+      { error: "Terjadi kesalahan pada server." },
       { status: 500 }
     );
   }

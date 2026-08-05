@@ -32,8 +32,15 @@ function hit(key: string, windowMs: number, max: number): boolean {
   return true;
 }
 
+// Ambil entri TERAKHIR dari X-Forwarded-For, bukan yang pertama. Reverse proxy
+// tepercaya (nginx dgn proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;)
+// MENAMBAHKAN IP asli klien di ujung rantai — entri sebelumnya bisa disuntik
+// bebas oleh klien itu sendiri. Ambil [0] berarti mempercayai nilai yang bisa
+// dipalsukan penyerang untuk melewati rate limit.
 function clientIp(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  const xff = req.headers.get("x-forwarded-for");
+  const ip = xff?.split(",").pop()?.trim();
+  return ip || "unknown";
 }
 
 const LOGIN_WINDOW_MS = 60_000;

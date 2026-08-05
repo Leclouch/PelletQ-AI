@@ -14,7 +14,7 @@ const { auth } = NextAuth(authConfig);
 // secara eksplisit dan redirect/401 manual bila belum login.
 export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
-  const isPublic = pathname === "/login" || pathname.startsWith("/api/auth");
+  const isPublic = pathname === "/login" || pathname.startsWith("/api/auth/");
 
   if (!isPublic && !req.auth?.user) {
     if (pathname.startsWith("/api")) {
