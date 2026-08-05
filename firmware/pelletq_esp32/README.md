@@ -57,6 +57,11 @@ cp secrets.h.example secrets.h
 > Arduino IDE juga membaca `secrets.h` selama filenya ada di folder sketch yang sama
 > (satu folder dengan `pelletq_esp32.ino`) — tidak perlu langkah tambahan.
 
+> Untuk deploy produksi (broker MQTT lewat internet, bukan LAN lokal), MQTT_BROKER
+> harus domain publik dengan sertifikat TLS di port 8883, dan MQTT_USERNAME/
+> MQTT_PASSWORD wajib diisi kredensial asli (bukan bench-test). Lihat checklist
+> lengkap di `.env.example` bagian atas.
+
 ## Build — Opsi A: PlatformIO (direkomendasikan)
 
 Tidak perlu mengedit library. Semua define TFT_eSPI ada di `platformio.ini`.
