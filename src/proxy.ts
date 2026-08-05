@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/auth.config";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Konvensi Next.js 16: file "proxy" menggantikan "middleware".
 // Named export "proxy" menggantikan default export middleware.
@@ -22,16 +23,19 @@ export const proxy = auth((req) => {
     return NextResponse.redirect(new URL("/login", req.nextUrl.origin));
   }
 
+  const rateLimited = checkRateLimit(req);
+  if (rateLimited) return rateLimited;
+
   return NextResponse.next();
 });
 
 export const config = {
-  // Proteksi semua route KECUALI /api/auth/*, /login, asset Next.js, dan
-  // file ikon (favicon.ico, icon.png, apple-icon.png) — ikon harus bisa
-  // dimuat tanpa login, mis. di halaman /login itu sendiri. Route-route ini
-  // juga dikecualikan secara eksplisit lewat `isPublic` di atas supaya request
-  // yang lolos matcher (mis. karena prefix lain) tetap konsisten.
+  // Proteksi semua route KECUALI /login, asset Next.js, dan file ikon
+  // (favicon.ico, icon.png, apple-icon.png) — ikon harus bisa dimuat tanpa login,
+  // mis. di halaman /login itu sendiri. /api/auth/* HARUS dimasukkan matcher
+  // supaya rate limiter bisa berjalan pada login attempts. Route /login tetap
+  // dikecualikan di sini dan ditangani oleh `isPublic` di dalam proxy.
   matcher: [
-    "/((?!api/auth|login|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png).*)",
+    "/((?!login|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png).*)",
   ],
 };
