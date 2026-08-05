@@ -22,10 +22,12 @@ services:
     container_name: pelletq-mosquitto
     restart: unless-stopped
     ports:
-      - "1883:1883"   # MQTT
-      - "9001:9001"   # WebSocket (untuk dashboard real-time nanti)
+      - "127.0.0.1:1883:1883"   # MQTT plain — lokal only, dipakai Next.js server di host yang sama
+      - "8883:8883"             # MQTT TLS — publik, dipakai ESP32 (beda jaringan dari server)
+      - "127.0.0.1:9001:9001"   # WebSocket — lokal only (belum dipakai apa pun)
     volumes:
       - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/certs:/mosquitto/certs:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 

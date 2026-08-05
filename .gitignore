@@ -40,6 +40,10 @@ yarn-error.log*
 # firmware secrets (WiFi/MQTT credentials)
 firmware/**/secrets.h
 
+# mosquitto secrets (broker password file + local dev certs)
+mosquitto/config/passwd
+mosquitto/certs/
+
 # vercel
 .vercel
 
