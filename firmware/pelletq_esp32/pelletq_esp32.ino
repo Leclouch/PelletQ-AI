@@ -61,6 +61,7 @@
  */
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <ESP32Servo.h>
@@ -72,6 +73,7 @@
 // lalu isi WIFI_SSID/WIFI_PASSWORD/MQTT_BROKER/MQTT_PORT sebelum upload.
 // ============================================================================
 #include "secrets.h"
+#include "ca_cert.h"
 
 // ============================================================================
 // PIN MAP
@@ -156,8 +158,8 @@ Servo hopperServo;
 const char* servoStateStr = "CLOSED";
 
 // Konektivitas
-WiFiClient   wifiClient;
-PubSubClient mqtt(wifiClient);
+WiFiClientSecure wifiClient;
+PubSubClient     mqtt(wifiClient);
 bool wifiOk = false;
 bool mqttOk = false;
 
@@ -231,7 +233,8 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  // MQTT
+  // MQTT (TLS)
+  wifiClient.setCACert(ROOT_CA);
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   mqtt.setBufferSize(1024);
   mqtt.setCallback([](char* topic, byte* payload, unsigned int len) {
@@ -604,7 +607,7 @@ void handleMqtt() {
       lastRetry = now;
       Serial.printf("[mqtt] connecting to %s:%d ...\n", MQTT_BROKER, MQTT_PORT);
       // LWT retained "offline"; saat konek publish "online".
-      if (mqtt.connect(MQTT_CLIENT_ID, nullptr, nullptr,
+      if (mqtt.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD,
                        TOPIC_STATUS, 0, true, "offline")) {
         mqtt.publish(TOPIC_STATUS, "online", true);
         mqtt.subscribe(TOPIC_CONFIG);        // retained -> config terakhir masuk
