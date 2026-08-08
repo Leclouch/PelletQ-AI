@@ -67,7 +67,24 @@ services:
     entrypoint: ["pnpm", "exec", "prisma"]
     profiles: ["tools"]
 
+  caddy:
+    image: caddy:2
+    container_name: pelletq-caddy
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
 volumes:
   postgres_data:
   mosquitto_data:
   mosquitto_log:
+  caddy_data:
+  caddy_config:

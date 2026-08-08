@@ -1,0 +1,7 @@
+{$APP_DOMAIN} {
+	reverse_proxy app:3000
+}
+
+{$MQTT_DOMAIN} {
+	respond "PelletQ MQTT broker - connect on 8883" 200
+}
