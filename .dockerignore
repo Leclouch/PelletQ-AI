@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+docs
+.claude
+.superpowers
+.worktrees
+firmware
+test
+.env
+.env.*
+*.tsbuildinfo
