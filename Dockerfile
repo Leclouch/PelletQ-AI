@@ -20,6 +20,7 @@ RUN SRC=$(find node_modules/.pnpm -maxdepth 3 -type d -path '*/@prisma+client@*/
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 EXPOSE 3000

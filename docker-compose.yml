@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pelletq
-      POSTGRES_PASSWORD: pelletq_dev_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pelletq_dev_password}
       POSTGRES_DB: pelletq
     ports:
       - "127.0.0.1:5432:5432"
@@ -36,9 +36,36 @@ services:
     container_name: pelletq-adminer
     restart: unless-stopped
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     depends_on:
       - postgres
+
+  app:
+    build:
+      context: .
+      target: runtime
+    container_name: pelletq-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["pnpm", "exec", "prisma"]
+    profiles: ["tools"]
 
 volumes:
   postgres_data:
