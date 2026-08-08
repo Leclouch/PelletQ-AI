@@ -1,170 +1,144 @@
 # PelletQ-AI
 
 Sistem produksi pakan ikan lele otomatis berbasis AI untuk PKM-PI UGM.
-Website + Backend AI + ESP32 (via MQTT) untuk mengendalikan mesin pelet.
+Website, backend AI, dan ESP32 via MQTT mengendalikan mesin pelet.
 
-Alur singkat: **input di website → LP Solver (formulasi optimal SNI 01-4087-2006) → Rule-Based AI (parameter mesin) → validasi SNI → kirim ke ESP32 via MQTT / tampil di dashboard.**
+Alur: input website -> LP Solver -> Rule-Based AI -> validasi SNI -> kirim ke
+ESP32 via MQTT atau tampilkan di dashboard.
 
 ## Arsitektur
 
-Aplikasi ini adalah **satu proyek Next.js (App Router)** — frontend dan backend berjalan dalam satu proses:
+PelletQ-AI adalah satu proyek Next.js (App Router):
 
-- **Frontend** — halaman & komponen React di `src/app` dan `src/components`.
-- **Backend** — API routes di `src/app/api/*` (bukan server terpisah). Logika inti ada di `src/lib` (`lp-solver.ts`, `sni-validator.ts`, `rule-engine.ts`, `prisma.ts`).
-- **Infrastruktur** — PostgreSQL, Mosquitto (MQTT), dan Adminer dijalankan lewat Docker Compose.
-
-Jadi menjalankan `pnpm dev` sudah menjalankan frontend **dan** backend sekaligus. Yang perlu berjalan terpisah hanya database + MQTT (via Docker).
+- Frontend: halaman dan komponen React di src/app dan src/components.
+- Backend: API routes di src/app/api/* dan logika inti di src/lib.
+- Infrastruktur: PostgreSQL, Mosquitto, Adminer, aplikasi Next.js, dan Caddy
+  dikelola dengan Docker Compose.
 
 ## Prasyarat
 
-- **Node.js** ≥ 20 (dites di v24)
-- **pnpm** (package manager proyek — ada `pnpm-lock.yaml`)
-- **Docker** + **Docker Compose** (untuk PostgreSQL & Mosquitto)
-- Semua development dilakukan di **WSL2 Ubuntu**, bukan Windows
+- Node.js >= 22.13 (dites di v24); versi pnpm proyek mensyaratkan ini.
+- pnpm, Docker, dan Docker Compose.
+- Development dilakukan di WSL2 Ubuntu.
 
-> Belum punya pnpm? `npm install -g pnpm`
+## Setup lokal
 
-## Setup Awal (sekali saja)
+1. Install dependency:
 
-### 1. Install dependencies
+    pnpm install
 
-```bash
-pnpm install
-```
+2. Buat .env di root proyek. Lihat .env.example untuk semua variabel.
 
-### 2. Buat file `.env`
+    POSTGRES_PASSWORD="pelletq_dev_password"
+    DATABASE_URL="postgresql://pelletq:pelletq_dev_password@localhost:5432/pelletq?schema=public"
+    MQTT_BROKER_URL="mqtt://localhost:1883"
+    AUTH_SECRET="isi-dengan-hasil-openssl-rand-base64-32"
+    AUTH_TRUST_HOST="true"
+    SEED_ADMIN_USERNAME="pelletq"
+    SEED_ADMIN_PASSWORD="admin321"
 
-File `.env` tidak ikut di-commit (masuk `.gitignore`). Buat di root proyek dengan isi berikut:
+3. Nyalakan infrastruktur lokal:
 
-```env
-# Database
-DATABASE_URL="postgresql://pelletq:pelletq_dev_password@localhost:5432/pelletq?schema=public"
+    docker compose up -d postgres mosquitto adminer
 
-# MQTT
-MQTT_BROKER_URL="mqtt://localhost:1883"
+4. Migrasikan dan seed database:
 
-# Gemini API (opsional, diisi nanti)
-GEMINI_API_KEY=""
+    pnpm prisma migrate dev
+    pnpm prisma db seed
 
-# Auth.js — generate dengan: openssl rand -base64 32
-AUTH_SECRET="isi-dengan-hasil-generate"
-AUTH_TRUST_HOST="true"
+5. Jalankan aplikasi:
 
-# Kredensial admin awal (dipakai `pnpm prisma db seed`)
-SEED_ADMIN_USERNAME="pelletq"
-SEED_ADMIN_PASSWORD="admin321"
-```
+    pnpm dev
 
-Referensi lengkap ada di `.env.example`. Kredensial database di atas cocok dengan `docker-compose.yml`, jadi tidak perlu diubah untuk development lokal. Login default dev: **`pelletq` / `admin321`**.
+Buka http://localhost:3000. Login dev default adalah pelletq / admin321.
 
-## Menjalankan
+## Deploy ke Server Sendiri (VPS)
 
-### 1. Nyalakan database & MQTT (Docker)
+Aplikasi produksi berjalan melalui Docker Compose: Postgres, Mosquitto, Adminer,
+Next.js, dan Caddy. Caddy menjadi reverse proxy serta TLS terminator. Caddy
+menerbitkan sertifikat Let's Encrypt untuk APP_DOMAIN dan MQTT_DOMAIN; script
+scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
 
-```bash
-docker compose up -d
-```
+### 1. Setup server (sekali saja)
 
-Ini menjalankan tiga service:
+1. Clone repository ke server, misalnya /opt/pelletq.
+2. Buat .env mengikuti checklist .env.example. Isi POSTGRES_PASSWORD,
+   AUTH_SECRET, SEED_ADMIN_PASSWORD, MQTT_USERNAME, MQTT_PASSWORD, APP_DOMAIN,
+   dan MQTT_DOMAIN dengan nilai produksi.
+3. Arahkan DNS A record APP_DOMAIN dan MQTT_DOMAIN ke IP server.
+4. Buka firewall:
 
-| Service    | Container            | Port(s)                     | Fungsi                          |
-|------------|----------------------|-----------------------------|---------------------------------|
-| PostgreSQL | `pelletq-postgres`   | `5432`                      | Database utama                  |
-| Mosquitto  | `pelletq-mosquitto`  | `1883` (MQTT), `9001` (WS)  | Broker MQTT ke ESP32            |
-| Adminer    | `pelletq-adminer`    | `8081`                      | GUI database di http://localhost:8081 |
+    sudo ufw allow 80,443,8883/tcp
 
-Cek statusnya: `docker compose ps` (tunggu Postgres `healthy`).
+5. Buat password file Mosquitto:
 
-### 2. Siapkan skema & seed database
+    docker run --rm -it -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
+      mosquitto_passwd -c /mosquitto/config/passwd <username>
+    chmod 644 mosquitto/config/passwd
 
-Migrasi membuat semua tabel, seed mengisi data SNI, bahan baku, dan rule parameters.
+6. Nyalakan stack:
 
-```bash
-pnpm prisma migrate dev     # jalankan/apply migrasi
-pnpm prisma db seed         # isi data awal (SNI, ingredients, rule params)
-```
+    docker compose up -d
 
-> Kalau database sudah pernah dimigrasi & di-seed, langkah ini bisa dilewati.
+7. Migrasikan dan seed database:
 
-### 3. Jalankan aplikasi (frontend + backend)
+    docker compose run --rm migrate migrate deploy
+    docker compose run --rm migrate db seed
 
-```bash
-pnpm dev
-```
+8. Setelah Caddy memperoleh sertifikat, salin sertifikat broker ke Mosquitto:
 
-Buka **http://localhost:3000**.
+    MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh
 
-Karena backend berupa API routes di dalam proyek yang sama, endpoint langsung aktif di server yang sama, contohnya:
+9. Jadwalkan sinkronisasi sertifikat MQTT setiap hari (crontab -e):
 
-- `POST /api/formulation` — endpoint utama (formulasi + parameter mesin)
-- `GET/POST /api/ingredients` & `/api/user-ingredients` — manajemen bahan
-- `GET /api/options` — opsi form
-- `GET /api/docs` + halaman **/docs** — dokumentasi API (OpenAPI)
+    0 3 * * * cd /opt/pelletq && MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh >> /var/log/pelletq-cert-sync.log 2>&1
 
-## Deploy (Self-Host)
+### 2. Deploy perubahan berikutnya
 
-Untuk menjalankan di server sendiri (bukan `pnpm dev`). Aplikasi wajib diakses lewat **HTTPS** — Auth.js memakai cookie sesi `Secure`, jadi di atas `http://` polos login akan tampak berhasil tapi balik lagi ke `/login`.
+    ./scripts/deploy.sh
 
-### 1. Environment produksi
-
-Set env berikut di server (jangan commit `.env`):
-
-| Variabel | Wajib | Catatan |
-|----------|:-----:|---------|
-| `DATABASE_URL` | ✅ | Ganti `pelletq_dev_password` dengan password DB produksi. |
-| `AUTH_SECRET` | ✅ | Secret baru & acak: `openssl rand -base64 32`. Jangan pakai punya dev. |
-| `AUTH_TRUST_HOST` | ✅ | `"true"` — wajib saat di belakang reverse proxy (Nginx/Caddy). Tanpa ini login/redirect rusak. |
-| `SEED_ADMIN_USERNAME` | ✅ | Username admin awal. |
-| `SEED_ADMIN_PASSWORD` | ✅ | Password admin **kuat**. Kalau kosong, seed memakai `admin321` (hanya dev) dan menampilkan peringatan. |
-| `MQTT_BROKER_URL` | – | Sesuaikan bila broker MQTT terpisah. |
-
-### 2. Build & siapkan database
-
-```bash
-pnpm install --frozen-lockfile
-pnpm prisma migrate deploy      # apply migrasi (BUKAN `migrate dev` di produksi)
-pnpm prisma db seed             # buat user admin dari SEED_ADMIN_* di atas
-pnpm build
-```
-
-### 3. Jalankan
-
-```bash
-pnpm start                      # Next.js production server (port 3000)
-```
-
-Taruh di belakang reverse proxy ber-TLS (Nginx/Caddy) yang meneruskan ke `localhost:3000`.
+Script menjalankan git pull, build ulang image aplikasi, memperbarui stack, dan
+menerapkan migrasi Prisma.
 
 ### Checklist keamanan
 
-- [ ] `SEED_ADMIN_PASSWORD` diganti dari default `admin321`.
-- [ ] `AUTH_SECRET` baru & rahasia (tidak sama dengan dev, tidak di-commit).
-- [ ] `AUTH_TRUST_HOST="true"` + akses lewat HTTPS.
-- [ ] Password `DATABASE_URL` bukan `pelletq_dev_password`.
-- [ ] (Opsional) rate-limit endpoint login, hapus halaman `/test` bila tak dipakai.
+- [ ] SEED_ADMIN_PASSWORD diganti dari admin321.
+- [ ] AUTH_SECRET baru, rahasia, dan tidak di-commit.
+- [ ] POSTGRES_PASSWORD diganti dari pelletq_dev_password.
+- [ ] MQTT_USERNAME/MQTT_PASSWORD diganti dari kredensial dev.
+- [ ] DNS APP_DOMAIN dan MQTT_DOMAIN menunjuk ke server sebelum docker compose up -d.
+- [ ] Firewall hanya membuka 80, 443, dan 8883. Postgres, MQTT plain,
+      WebSocket MQTT, dan Adminer tetap loopback-only.
 
-## Perintah Berguna
+### Verifikasi setelah deploy pertama
 
-| Perintah                     | Fungsi                                              |
-|------------------------------|-----------------------------------------------------|
-| `pnpm dev`                   | Jalankan frontend + backend (mode development)      |
-| `pnpm build`                 | Build produksi                                      |
-| `pnpm start`                 | Jalankan hasil build produksi                       |
-| `pnpm lint`                  | ESLint                                              |
-| `pnpm prisma studio`         | GUI Prisma untuk lihat/edit data                    |
-| `pnpm prisma migrate dev`    | Buat/apply migrasi                                  |
-| `pnpm prisma db seed`        | Seed data awal                                      |
-| `docker compose up -d`       | Nyalakan Postgres + Mosquitto + Adminer             |
-| `docker compose down`        | Matikan semua container (data tetap tersimpan)      |
-| `docker compose down -v`     | Matikan + hapus volume (⚠️ menghapus data database) |
+- [ ] https://<APP_DOMAIN>/login dapat diakses dari luar dengan sertifikat valid.
+- [ ] openssl s_client -connect <MQTT_DOMAIN>:8883 dari mesin lain menunjukkan
+      sertifikat valid untuk MQTT_DOMAIN.
+- [ ] Dari luar server, port 5432, 1883, 9001, dan 8081 gagal diakses.
+- [ ] Bench test ESP32 asli terhadap MQTT_DOMAIN:8883 selesai dilakukan.
+
+## Perintah berguna
+
+| Perintah | Fungsi |
+|---|---|
+| pnpm dev | Jalankan frontend dan backend mode development. |
+| pnpm build | Build produksi. |
+| pnpm lint | Jalankan ESLint. |
+| pnpm prisma studio | GUI Prisma. |
+| docker compose up -d | Nyalakan stack container. |
+| docker compose down | Matikan stack (data tetap tersimpan). |
+| docker compose down -v | Matikan stack dan hapus volume data. |
 
 ## Troubleshooting
 
-- **`Can't reach database server at localhost:5432`** — Docker belum jalan. Jalankan `docker compose up -d` dan tunggu Postgres `healthy` (`docker compose ps`).
-- **Error `DATABASE_URL` undefined** — file `.env` belum dibuat atau salah lokasi (harus di root proyek). Prisma memuatnya via `prisma.config.ts` + `dotenv`.
-- **Port 5432/3000/8081 bentrok** — matikan service lain yang memakai port tersebut, atau ubah mapping port di `docker-compose.yml`.
-- **Tabel kosong / data SNI tidak ada** — jalankan ulang `pnpm prisma db seed`.
+- Tidak dapat mencapai Postgres: jalankan docker compose up -d postgres dan
+  tunggu status healthy.
+- DATABASE_URL undefined: buat .env di root proyek.
+- Port bentrok: periksa service lokal yang memakai port tersebut.
+- Tabel kosong: jalankan ulang migrasi dan seed.
 
 ## Tech Stack
 
-Next.js 16 (App Router) + TypeScript · PostgreSQL + Prisma 7 (`@prisma/adapter-pg`) · Mosquitto MQTT · `javascript-lp-solver` · Google Gemini API (ditunda) · Docker Compose.
+Next.js 16, TypeScript, PostgreSQL, Prisma 7, Mosquitto MQTT,
+javascript-lp-solver, Docker Compose, dan Caddy.
