@@ -27,6 +27,10 @@ const docsSecurityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+  turbopack: {
+    root: process.cwd(),
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },
