@@ -12,8 +12,8 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
 
 - Frontend: halaman dan komponen React di src/app dan src/components.
 - Backend: API routes di src/app/api/* dan logika inti di src/lib.
-- Infrastruktur: PostgreSQL, Mosquitto, Adminer, aplikasi Next.js, dan Caddy
-  dikelola dengan Docker Compose.
+- Infrastruktur: PostgreSQL, Mosquitto, Adminer, aplikasi Next.js, dan
+  cloudflared dikelola dengan Docker Compose.
 
 ## Prasyarat
 
@@ -73,24 +73,22 @@ aktif di server yang sama, contohnya:
 ## Deploy ke Server Sendiri (VPS)
 
 Aplikasi produksi berjalan melalui Docker Compose: Postgres, Mosquitto, Adminer,
-Next.js, dan Caddy. Caddy menjadi reverse proxy serta TLS terminator. Caddy
-menerbitkan sertifikat Let's Encrypt untuk APP_DOMAIN dan MQTT_DOMAIN; script
-scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
+Next.js, dan cloudflared. Server ini boleh berada di belakang CGNAT / tanpa IP
+publik — tidak ada port yang perlu di-forward di router. cloudflared membuka
+koneksi keluar ke Cloudflare Tunnel dan meneruskan trafik dari dua public
+hostname (nilai APP_DOMAIN dan MQTT_DOMAIN, dikonfigurasi di dashboard
+Cloudflare, bukan di .env) ke app:3000 dan mosquitto:9001 lewat jaringan Docker
+internal. Cloudflare menangani TLS di edge (sertifikat publik dari CA yang
+umum dipercaya) — tidak ada sertifikat yang perlu dikelola atau diperbarui di
+server.
 
 ### 1. Setup server (sekali saja)
 
 1. Clone repository ke server, misalnya /opt/pelletq.
 2. Buat .env mengikuti checklist .env.example. Isi POSTGRES_PASSWORD,
-   AUTH_SECRET, SEED_ADMIN_PASSWORD, MQTT_USERNAME, MQTT_PASSWORD, APP_DOMAIN,
-   dan MQTT_DOMAIN dengan nilai produksi.
-3. Arahkan DNS A record APP_DOMAIN dan MQTT_DOMAIN ke IP server.
-4. Buka firewall:
-
-    ```bash
-    sudo ufw allow 80,443,8883/tcp
-    ```
-
-5. Buat password file Mosquitto:
+   AUTH_SECRET, SEED_ADMIN_PASSWORD, MQTT_USERNAME, MQTT_PASSWORD, dan
+   TUNNEL_TOKEN (didapat di langkah 4) dengan nilai produksi.
+3. Buat password file Mosquitto:
 
     ```bash
     docker run --rm -it -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
@@ -98,33 +96,29 @@ scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
     chmod 644 mosquitto/config/passwd
     ```
 
+4. Buat tunnel di dashboard Cloudflare Zero Trust: Networks -> Tunnels ->
+   Create a tunnel. Salin token yang diberikan ke TUNNEL_TOKEN di .env.
+   Domain harus sudah dikelola nameserver Cloudflare — Cloudflare otomatis
+   membuat DNS record yang dibutuhkan saat public hostname ditambahkan,
+   tidak perlu bikin A record manual.
+5. Tambahkan dua public hostname pada tunnel yang sama:
+
+    | Public hostname | Service |
+    |---|---|
+    | domain app (nilai APP_DOMAIN, mis. app.pelletqai.com) | http://app:3000 |
+    | domain MQTT (nilai MQTT_DOMAIN, mis. mqtt.pelletqai.com) | http://mosquitto:9001 |
+
 6. Nyalakan stack:
 
     ```bash
     docker compose up -d
     ```
 
-   Mosquitto akan restart-loop sampai langkah 8 (sinkronisasi sertifikat)
-   selesai, karena listener 8883 butuh sertifikat di mosquitto/certs yang
-   belum ada di titik ini. Ini normal, bukan tanda deploy gagal.
-
 7. Migrasikan dan seed database:
 
     ```bash
     docker compose run --rm migrate migrate deploy
     docker compose run --rm migrate db seed
-    ```
-
-8. Setelah Caddy memperoleh sertifikat, salin sertifikat broker ke Mosquitto:
-
-    ```bash
-    MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh
-    ```
-
-9. Jadwalkan sinkronisasi sertifikat MQTT setiap hari (crontab -e):
-
-    ```bash
-    0 3 * * * cd /opt/pelletq && MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh >> /var/log/pelletq-cert-sync.log 2>&1
     ```
 
 ### 2. Deploy perubahan berikutnya
@@ -140,17 +134,20 @@ menerapkan migrasi Prisma.
 - [ ] AUTH_SECRET baru, rahasia, dan tidak di-commit.
 - [ ] POSTGRES_PASSWORD diganti dari pelletq_dev_password.
 - [ ] MQTT_USERNAME/MQTT_PASSWORD diganti dari kredensial dev.
-- [ ] DNS APP_DOMAIN dan MQTT_DOMAIN menunjuk ke server sebelum docker compose up -d.
-- [ ] Firewall hanya membuka 80, 443, dan 8883. Postgres, MQTT plain,
-      WebSocket MQTT, dan Adminer tetap loopback-only.
+- [ ] TUNNEL_TOKEN rahasia dan tidak di-commit.
+- [ ] Tidak ada port yang dibuka manual di firewall/router — cloudflared
+      cuma membuat koneksi keluar ke Cloudflare. Postgres, MQTT plain,
+      WebSocket MQTT, dan Adminer tetap loopback-only di docker-compose.yml.
 
 ### Verifikasi setelah deploy pertama
 
-- [ ] https://<APP_DOMAIN>/login dapat diakses dari luar dengan sertifikat valid.
-- [ ] openssl s_client -connect <MQTT_DOMAIN>:8883 dari mesin lain menunjukkan
-      sertifikat valid untuk MQTT_DOMAIN.
-- [ ] Dari luar server, port 5432, 1883, 9001, dan 8081 gagal diakses.
-- [ ] Bench test ESP32 asli terhadap MQTT_DOMAIN:8883 selesai dilakukan.
+- [ ] https://<APP_DOMAIN>/login dapat diakses dari luar.
+- [ ] docker compose logs cloudflared menunjukkan tunnel connected, tanpa
+      error mengenai public hostname.
+- [ ] ESP32 (atau client MQTT WebSocket lain) dapat connect ke
+      wss://<MQTT_DOMAIN> dan publish/subscribe topik pelletq/*.
+- [ ] Dari luar server, port 5432, 1883, 9001, dan 8081 gagal diakses
+      langsung — hanya lewat tunnel yang bisa dijangkau.
 
 ## Perintah berguna
 
@@ -171,8 +168,12 @@ menerapkan migrasi Prisma.
 - DATABASE_URL undefined: buat .env di root proyek.
 - Port bentrok: periksa service lokal yang memakai port tersebut.
 - Tabel kosong: jalankan ulang migrasi dan seed.
+- Public hostname tidak bisa diakses dari luar: cek
+  docker compose logs cloudflared — pastikan TUNNEL_TOKEN benar dan kedua
+  public hostname di dashboard Cloudflare mengarah ke service yang tepat
+  (http://app:3000 dan http://mosquitto:9001).
 
 ## Tech Stack
 
 Next.js 16, TypeScript, PostgreSQL, Prisma 7, Mosquitto MQTT,
-javascript-lp-solver, Docker Compose, dan Caddy.
+javascript-lp-solver, Docker Compose, dan Cloudflare Tunnel.
