@@ -71,7 +71,9 @@ services:
     image: caddy:2
     container_name: pelletq-caddy
     restart: unless-stopped
-    env_file: .env
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      MQTT_DOMAIN: ${MQTT_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
