@@ -23,11 +23,11 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:1883:1883"   # MQTT plain — lokal only, dipakai Next.js server di host yang sama
-      - "8883:8883"             # MQTT TLS — publik, dipakai ESP32 (beda jaringan dari server)
-      - "127.0.0.1:9001:9001"   # WebSocket — lokal only (belum dipakai apa pun)
+      - "127.0.0.1:9001:9001"   # WebSocket plain — lokal only. ESP32 mencapai listener ini lewat
+                                 # cloudflared di jaringan Docker internal (mosquitto:9001), bukan
+                                 # lewat mapping port ini; mapping ini cuma untuk debug dari host.
     volumes:
       - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/certs:/mosquitto/certs:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
@@ -67,26 +67,18 @@ services:
     entrypoint: ["pnpm", "exec", "prisma"]
     profiles: ["tools"]
 
-  caddy:
-    image: caddy:2
-    container_name: pelletq-caddy
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: pelletq-cloudflared
     restart: unless-stopped
+    command: tunnel run
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      MQTT_DOMAIN: ${MQTT_DOMAIN}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on:
       - app
+      - mosquitto
 
 volumes:
   postgres_data:
   mosquitto_data:
   mosquitto_log:
-  caddy_data:
-  caddy_config:
