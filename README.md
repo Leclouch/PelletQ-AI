@@ -25,10 +25,13 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
 
 1. Install dependency:
 
+    ```bash
     pnpm install
+    ```
 
 2. Buat .env di root proyek. Lihat .env.example untuk semua variabel.
 
+    ```bash
     POSTGRES_PASSWORD="pelletq_dev_password"
     DATABASE_URL="postgresql://pelletq:pelletq_dev_password@localhost:5432/pelletq?schema=public"
     MQTT_BROKER_URL="mqtt://localhost:1883"
@@ -36,19 +39,26 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
     AUTH_TRUST_HOST="true"
     SEED_ADMIN_USERNAME="pelletq"
     SEED_ADMIN_PASSWORD="admin321"
+    ```
 
 3. Nyalakan infrastruktur lokal:
 
+    ```bash
     docker compose up -d postgres mosquitto adminer
+    ```
 
 4. Migrasikan dan seed database:
 
+    ```bash
     pnpm prisma migrate dev
     pnpm prisma db seed
+    ```
 
 5. Jalankan aplikasi:
 
+    ```bash
     pnpm dev
+    ```
 
 Buka http://localhost:3000. Login dev default adalah pelletq / admin321.
 
@@ -76,17 +86,23 @@ scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
 3. Arahkan DNS A record APP_DOMAIN dan MQTT_DOMAIN ke IP server.
 4. Buka firewall:
 
+    ```bash
     sudo ufw allow 80,443,8883/tcp
+    ```
 
 5. Buat password file Mosquitto:
 
+    ```bash
     docker run --rm -it -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
       mosquitto_passwd -c /mosquitto/config/passwd <username>
     chmod 644 mosquitto/config/passwd
+    ```
 
 6. Nyalakan stack:
 
+    ```bash
     docker compose up -d
+    ```
 
    Mosquitto akan restart-loop sampai langkah 8 (sinkronisasi sertifikat)
    selesai, karena listener 8883 butuh sertifikat di mosquitto/certs yang
@@ -94,16 +110,22 @@ scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
 
 7. Migrasikan dan seed database:
 
+    ```bash
     docker compose run --rm migrate migrate deploy
     docker compose run --rm migrate db seed
+    ```
 
 8. Setelah Caddy memperoleh sertifikat, salin sertifikat broker ke Mosquitto:
 
+    ```bash
     MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh
+    ```
 
 9. Jadwalkan sinkronisasi sertifikat MQTT setiap hari (crontab -e):
 
+    ```bash
     0 3 * * * cd /opt/pelletq && MQTT_DOMAIN=<nilai-MQTT_DOMAIN> ./scripts/sync-mqtt-cert.sh >> /var/log/pelletq-cert-sync.log 2>&1
+    ```
 
 ### 2. Deploy perubahan berikutnya
 
