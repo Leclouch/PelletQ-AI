@@ -59,12 +59,34 @@ working, iterated-on hardware integration code to solve a problem that's
 really confined to one component: the MQTT client.
 
 `arduino-esp32` (the Arduino core PlatformIO uses for ESP32) is itself built
-on top of ESP-IDF, and PlatformIO supports a combined
-`framework = arduino, espidf` mode for exactly this situation — keeping
-Arduino APIs for everything else while getting access to ESP-IDF components
-(like `esp-mqtt`) that Arduino alone doesn't expose. This design treats that
-combination as unverified but promising, and spikes it before committing the
-full sketch to it.
+on top of ESP-IDF. Two ways of combining it with ESP-IDF's `esp-mqtt` were
+evaluated hands-on before writing the implementation plan:
+
+- **PlatformIO's combined `framework = arduino, espidf` mode** — rejected.
+  Reproducibly fails with `CMake Error ... define_property command is not
+  scriptable` inside `component_get_requirements.cmake`, identically across
+  two ESP-IDF major versions (4.4.7 and 5.4.1, via both the official
+  `platformio/espressif32` platform and the `pioarduino` fork) and two CMake
+  versions (3.16.4, 3.30.2). This is a structural bug in PlatformIO's
+  "Arduino as an ESP-IDF component" shorthand, not a version-pin problem.
+- **ESP-IDF as the primary framework, with `arduino-esp32` pulled in as a
+  proper managed IDF component** via `idf_component.yml` — confirmed
+  working. This is Espressif's own documented integration path. A bare
+  ESP-IDF project (no Arduino) builds cleanly in the same environment,
+  isolating the above failure to PlatformIO's shorthand specifically, not a
+  general problem with ESP-IDF builds. With `arduino-esp32` pinned to
+  `3.2.0` (matching what the `pioarduino/platform-espressif32` fork bundles)
+  and `CONFIG_FREERTOS_HZ=1000` set (a hard requirement `arduino-esp32`
+  itself asserts), dependency resolution, Kconfig, and the actual
+  `esp_mqtt_client_config_t` WebSocket-transport code all compiled
+  successfully. One narrow, well-characterized issue remains open for the
+  implementation plan to resolve: `arduino-esp32` unconditionally depends on
+  `espressif/esp_insights` for the `esp32` target, and that component's
+  cert-file embedding resolves to a broken path specifically under
+  PlatformIO's build wrapper — unrelated to WiFi/MQTT/Arduino functionality,
+  and not yet root-caused to a single fix.
+
+This design uses the second approach.
 
 ## Constraints
 
@@ -81,8 +103,10 @@ full sketch to it.
 - The firmware/pelletq_esp32/mqtt_test.ino connection layer is the only
   thing intentionally changing. Topics, state machine, config schema,
   hardware pin map, and bench-test commands are unchanged from the recovered
-  `e799f00` version unless a hybrid-framework constraint forces a change
-  (to be discovered during the spike, not assumed up front).
+  `e799f00` version. The build *structure* does change for the whole
+  project (PlatformIO framework switches from `arduino` to `espidf` +
+  `arduino-esp32` component) since that's a project-wide setting, not a
+  per-file one — but no application logic outside the MQTT layer changes.
 
 ## Design
 
@@ -96,25 +120,33 @@ Restore, unmodified, from commit `e799f00`:
 
 `ca_cert.h` is deliberately **not** restored — see Step 3.
 
-### Step 2 — Spike the hybrid framework on the bare MQTT sketch
+### Step 2 — Validate the build recipe on the bare MQTT sketch
 
 Using `firmware/mqtt_test/` (no display/servo/sensor dependencies, so the
 fastest thing to iterate on):
 
-1. Change `platformio.ini`'s `framework = arduino` to
-   `framework = arduino, espidf`.
-2. Replace the `PubSubClient`-based connection code with ESP-IDF's
+1. `platformio.ini`: `framework = espidf`, `platform` pinned to the
+   `pioarduino/platform-espressif32` fork (confirmed working; the official
+   `platformio/espressif32` platform is not used — see above).
+2. `sdkconfig.defaults`: `CONFIG_FREERTOS_HZ=1000`.
+3. `src/idf_component.yml`: declare `espressif/arduino-esp32` pinned to
+   `3.2.0` and the `mqtt` component, as dependencies.
+4. Replace the `PubSubClient`-based connection code with ESP-IDF's
    `esp_mqtt_client`, configured for WebSocket transport:
    `esp_mqtt_client_config_t` with `.broker.address.uri` set to a `ws://`
-   URI and `.transport = MQTT_TRANSPORT_OVER_WS` (switching to `wss://` /
-   `MQTT_TRANSPORT_OVER_WSS` is Step 3's concern once a real public
-   endpoint exists). Keep the existing heartbeat/LWT/echo behavior, just
-   ported onto the new client's callback style.
-3. `pio run`. Success is a clean compile and link — this is what actually
-   tests whether the combined framework works for this dependency set at
-   all. If it fails in a way that isn't a quick fix (missing component,
-   genuine incompatibility), that's a decision point to come back to the
-   user with, not something to route around silently.
+   URI (switching to `wss://` is Step 4's concern once a real public
+   endpoint exists). Entry point is a native `app_main()` calling
+   `initArduino()` once, then the existing `setup()`/loop-equivalent logic.
+   Keep the existing heartbeat/LWT/echo behavior, just ported onto the new
+   client's event-driven callback style.
+5. `pio run`. Success is a clean compile and link. One known issue must be
+   resolved as part of this step, not treated as a blocker to route around
+   silently: `arduino-esp32`'s manifest unconditionally depends on
+   `espressif/esp_insights` for the `esp32` target, and that component's
+   cert-file embedding resolves to a broken, doubled path specifically
+   under PlatformIO's build wrapper. Confirmed unrelated to WiFi/MQTT: a
+   bare ESP-IDF project with no Arduino component builds cleanly in the
+   same environment.
 
 ### Step 3 — Verify the WebSocket path/URI against a real Mosquitto listener
 
