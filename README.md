@@ -88,6 +88,10 @@ scripts/sync-mqtt-cert.sh menyalin sertifikat MQTT ke Mosquitto.
 
     docker compose up -d
 
+   Mosquitto akan restart-loop sampai langkah 8 (sinkronisasi sertifikat)
+   selesai, karena listener 8883 butuh sertifikat di mosquitto/certs yang
+   belum ada di titik ini. Ini normal, bukan tanda deploy gagal.
+
 7. Migrasikan dan seed database:
 
     docker compose run --rm migrate migrate deploy
