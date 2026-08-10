@@ -52,6 +52,14 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
 
 Buka http://localhost:3000. Login dev default adalah pelletq / admin321.
 
+Karena backend berupa API routes di dalam proyek yang sama, endpoint langsung
+aktif di server yang sama, contohnya:
+
+- POST /api/formulation - endpoint utama (formulasi + parameter mesin)
+- GET/POST /api/ingredients dan /api/user-ingredients - manajemen bahan
+- GET /api/options - opsi form
+- GET /api/docs dan halaman /docs - dokumentasi API (OpenAPI)
+
 ## Deploy ke Server Sendiri (VPS)
 
 Aplikasi produksi berjalan melalui Docker Compose: Postgres, Mosquitto, Adminer,
