@@ -1,9 +1,9 @@
 # PelletQ-AI — ESP32 Hopper Gate Controller
 
 Dokumentasi ini menjelaskan koneksi controller ESP32 PelletQ-AI ke broker MQTT.
-Controller uji yang dipulihkan berada di `firmware/mqtt_test`; ia memakai
-`esp-mqtt` dari ESP-IDF, bukan `PubSubClient`, dan terhubung melalui transport
-MQTT-over-WebSocket. Source firmware controller produksi tetap dikelola terpisah.
+Controller produksi yang dipulihkan berada di `firmware/pelletq_esp32`; ia
+memakai `esp-mqtt` dari ESP-IDF, bukan `PubSubClient`, dan terhubung melalui
+transport MQTT-over-WebSocket.
 
 ## Transport MQTT-over-WebSocket
 
@@ -115,5 +115,5 @@ listener 1883 dan WebSocket 9001 tetap localhost-only.
   `wss://mqtt.<domain>` ke listener 9001, lalu verifikasi sertifikat publik
   dan autentikasi Mosquitto. Listener 8883 saat ini adalah MQTT TLS mentah,
   bukan target WebSocket TLS ini.
-- [ ] Flash `firmware/mqtt_test` ke hardware ESP32 nyata, konfirmasi koneksi,
+- [ ] Flash `firmware/pelletq_esp32` ke hardware ESP32 nyata, konfirmasi koneksi,
   LWT retained, heartbeat, subscription command, dan reconnect Wi-Fi/MQTT.
