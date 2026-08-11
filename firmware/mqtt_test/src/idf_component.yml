@@ -3,3 +3,5 @@ dependencies:
   espressif/mqtt: "*"
   espressif/esp_insights:
     override_path: ../components/espressif__esp_insights
+  espressif/esp_rainmaker:
+    override_path: ../components/espressif__esp_rainmaker
