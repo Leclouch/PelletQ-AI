@@ -67,7 +67,7 @@
 #include <ArduinoJson.h>
 #include <esp_crt_bundle.h>
 #include <esp_event.h>
-#include <esp_mqtt_client.h>
+#include <mqtt_client.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
