@@ -640,7 +640,7 @@ void startMqttClient() {
     return;
   }
 
-  esp_mqtt_client_register_event(mqttClient, ESP_EVENT_ANY_ID, mqttEventHandler,
+  esp_mqtt_client_register_event(mqttClient, static_cast<esp_mqtt_event_id_t>(ESP_EVENT_ANY_ID), mqttEventHandler,
                                  nullptr);
   esp_err_t result = esp_mqtt_client_start(mqttClient);
   if (result != ESP_OK) {
