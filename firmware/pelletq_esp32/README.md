@@ -30,23 +30,23 @@ nilai placeholder dengan kredensial dari password file Mosquitto.
 Terminal 1 (subscriber):
 
 ```powershell
-mqttx sub -h ws://127.0.0.1 -p 9001 -t pelletq/test/transport -u <username> -P <password> -v
+mqttx sub -h 127.0.0.1 -p 9001 -l ws --path / -t pelletq/test/transport -u <username> -P <password> -v
 ```
 
 Terminal 2 (publisher):
 
 ```powershell
-mqttx pub -h ws://127.0.0.1 -p 9001 -t pelletq/test/transport -m websocket-ok -u <username> -P <password>
+mqttx pub -h 127.0.0.1 -p 9001 -l ws --path / -t pelletq/test/transport -m websocket-ok -u <username> -P <password>
 ```
 
 Validasi berhasil bila Terminal 1 menerima payload `websocket-ok` pada
 `pelletq/test/transport`. Bila URI endpoint dapat dikonfigurasi sebagai satu
 nilai oleh klien, gunakan `ws://127.0.0.1:9001` tanpa path.
 
-## Kredensial dan TLS produksi
+## Target WebSocket TLS produksi (masih ditunda)
 
 Simpan kredensial WiFi dan MQTT di `secrets.h` yang tidak di-commit. Untuk
-produksi, ESP32 harus menggunakan WebSocket aman pada domain TLS:
+target produksi, ESP32 akan menggunakan WebSocket aman pada domain TLS:
 
 ```cpp
 #define WIFI_SSID      "GANTI_SSID"
@@ -56,15 +56,20 @@ produksi, ESP32 harus menggunakan WebSocket aman pada domain TLS:
 #define MQTT_PASSWORD  "GANTI_PASSWORD"
 ```
 
-Jangan gunakan IP publik untuk `MQTT_URI`: sertifikat TLS diterbitkan untuk
+Jangan gunakan IP publik untuk `MQTT_URI`: sertifikat TLS akan diterbitkan untuk
 domain MQTT, sehingga host di URI harus tepat sama dengan domain tersebut.
 Gunakan default ESP-IDF certificate bundle untuk memvalidasi sertifikat publik
 (misalnya melalui `esp_crt_bundle_attach` pada konfigurasi transport TLS).
 Jangan menyalin atau mem-pin sertifikat ke `ca_cert.h`.
 
-Listener 1883 dan WebSocket 9001 hanya tersedia pada localhost server; ESP32
-di jaringan lain harus memakai endpoint `wss://mqtt.<domain>` yang dipublikasikan
-oleh infrastruktur produksi.
+Konfigurasi repository saat ini **belum** menyediakan endpoint tersebut:
+Mosquitto mengekspos listener TLS MQTT mentah pada port 8883, sedangkan Caddy
+hanya merespons HTTP pada `MQTT_DOMAIN`. Belum ada Cloudflare Tunnel atau proxy
+WebSocket yang meneruskan `wss://mqtt.<domain>` ke listener 9001. Dengan
+demikian, `wss://mqtt.<domain>` di atas adalah konfigurasi koneksi akhir yang
+diinginkan, bukan endpoint yang sudah live. Setelah tunnel/proxy WebSocket
+diaktifkan dan diverifikasi, ESP32 di jaringan lain harus memakai endpoint itu;
+listener 1883 dan WebSocket 9001 tetap localhost-only.
 
 ## Menyiapkan broker
 
@@ -87,8 +92,9 @@ oleh infrastruktur produksi.
    MQTT_DOMAIN=<domain-broker> ./scripts/sync-mqtt-cert.sh
    ```
 
-4. Konfigurasikan ESP32 dengan domain, kredensial, dan transport `wss://` di
-   atas. Uji koneksi broker dari jaringan luar sebelum menyalakan mesin pelet.
+4. Setelah tunnel/proxy WebSocket produksi tersedia, konfigurasikan ESP32
+   dengan domain, kredensial, dan transport `wss://` di atas. Uji koneksi
+   broker dari jaringan luar sebelum menyalakan mesin pelet.
 
 ## Topik MQTT
 
@@ -105,7 +111,9 @@ oleh infrastruktur produksi.
 
 - [ ] Jalankan pub/sub `ws://<host>:9001` di atas terhadap listener lokal dan
   catat bahwa payload diterima tanpa path aplikasi pada URI.
-- [ ] Buat Cloudflare Tunnel live untuk `mqtt.<domain>`, lalu verifikasi
-  `wss://mqtt.<domain>` memakai sertifikat publik dan autentikasi Mosquitto.
+- [ ] Buat Cloudflare Tunnel atau proxy WebSocket yang meneruskan
+  `wss://mqtt.<domain>` ke listener 9001, lalu verifikasi sertifikat publik
+  dan autentikasi Mosquitto. Listener 8883 saat ini adalah MQTT TLS mentah,
+  bukan target WebSocket TLS ini.
 - [ ] Flash `firmware/mqtt_test` ke hardware ESP32 nyata, konfirmasi koneksi,
   LWT retained, heartbeat, subscription command, dan reconnect Wi-Fi/MQTT.
