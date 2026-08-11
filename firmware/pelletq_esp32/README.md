@@ -1,27 +1,70 @@
 # PelletQ-AI — ESP32 Hopper Gate Controller
 
-Dokumentasi ini menjelaskan koneksi ESP32 ke broker MQTT produksi PelletQ-AI.
-Source firmware yang sebelumnya digunakan tidak dipulihkan dalam perubahan deployment
-ini; gunakan repository firmware yang dikelola untuk board yang akan dipasang.
+Dokumentasi ini menjelaskan koneksi controller ESP32 PelletQ-AI ke broker MQTT.
+Controller uji yang dipulihkan berada di `firmware/mqtt_test`; ia memakai
+`esp-mqtt` dari ESP-IDF, bukan `PubSubClient`, dan terhubung melalui transport
+MQTT-over-WebSocket. Source firmware controller produksi tetap dikelola terpisah.
 
-## Kredensial produksi
+## Transport MQTT-over-WebSocket
 
-Simpan kredensial WiFi dan MQTT di `secrets.h` yang tidak di-commit. Untuk broker
-produksi, gunakan domain TLS dan kredensial yang sama dengan `.env` di server:
+`mosquitto/config/mosquitto.conf` mendeklarasikan `listener 9001` dengan
+`protocol websockets`. Karena listener tersebut adalah MQTT-over-WebSocket
+murni, bentuk URI lokal yang diharapkan adalah:
+
+```text
+ws://<host>:9001
+```
+
+Jangan tambahkan path aplikasi seperti `/mqtt`. Endpoint itu masih **belum
+terverifikasi pada runtime** di workspace ini: Docker daemon tidak dapat diakses
+dan tidak ada klien MQTT-over-WebSocket yang tersedia. Jalankan prosedur
+validasi berikut setelah broker, password file, dan klien tersedia; baru gunakan
+URI tersebut pada perangkat.
+
+### Validasi lokal yang dapat diulang
+
+Pastikan service Mosquitto sudah berjalan, lalu gunakan MQTTX CLI (atau klien
+MQTT-over-WebSocket lain yang ekuivalen) dari dua terminal PowerShell. Ganti
+nilai placeholder dengan kredensial dari password file Mosquitto.
+
+Terminal 1 (subscriber):
+
+```powershell
+mqttx sub -h ws://127.0.0.1 -p 9001 -t pelletq/test/transport -u <username> -P <password> -v
+```
+
+Terminal 2 (publisher):
+
+```powershell
+mqttx pub -h ws://127.0.0.1 -p 9001 -t pelletq/test/transport -m websocket-ok -u <username> -P <password>
+```
+
+Validasi berhasil bila Terminal 1 menerima payload `websocket-ok` pada
+`pelletq/test/transport`. Bila URI endpoint dapat dikonfigurasi sebagai satu
+nilai oleh klien, gunakan `ws://127.0.0.1:9001` tanpa path.
+
+## Kredensial dan TLS produksi
+
+Simpan kredensial WiFi dan MQTT di `secrets.h` yang tidak di-commit. Untuk
+produksi, ESP32 harus menggunakan WebSocket aman pada domain TLS:
 
 ```cpp
 #define WIFI_SSID      "GANTI_SSID"
 #define WIFI_PASSWORD  "GANTI_PASSWORD"
-#define MQTT_BROKER    "mqtt.yourdomain.com"
-#define MQTT_PORT      8883
+#define MQTT_URI       "wss://mqtt.<domain>"
 #define MQTT_USERNAME  "GANTI_USERNAME"
 #define MQTT_PASSWORD  "GANTI_PASSWORD"
 ```
 
-Jangan gunakan IP publik untuk `MQTT_BROKER`: sertifikat TLS diterbitkan untuk
-`MQTT_DOMAIN`, sehingga nilai ini harus tepat sama dengan domain tersebut. Listener
-1883 dan WebSocket 9001 hanya tersedia pada localhost server; ESP32 harus terhubung
-ke listener TLS pada port 8883.
+Jangan gunakan IP publik untuk `MQTT_URI`: sertifikat TLS diterbitkan untuk
+domain MQTT, sehingga host di URI harus tepat sama dengan domain tersebut.
+Gunakan default ESP-IDF certificate bundle untuk memvalidasi sertifikat publik
+(misalnya melalui `esp_crt_bundle_attach` pada konfigurasi transport TLS).
+Jangan menyalin atau mem-pin sertifikat ke `ca_cert.h`.
+
+Listener 1883 dan WebSocket 9001 hanya tersedia pada localhost server; ESP32
+di jaringan lain harus memakai endpoint `wss://mqtt.<domain>` yang dipublikasikan
+oleh infrastruktur produksi.
 
 ## Menyiapkan broker
 
@@ -44,8 +87,8 @@ ke listener TLS pada port 8883.
    MQTT_DOMAIN=<domain-broker> ./scripts/sync-mqtt-cert.sh
    ```
 
-4. Konfigurasikan ESP32 dengan domain, port, dan kredensial di atas. Uji koneksi
-   broker dari jaringan luar sebelum menyalakan mesin pelet.
+4. Konfigurasikan ESP32 dengan domain, kredensial, dan transport `wss://` di
+   atas. Uji koneksi broker dari jaringan luar sebelum menyalakan mesin pelet.
 
 ## Topik MQTT
 
@@ -57,3 +100,12 @@ ke listener TLS pada port 8883.
 | `pelletq/config/ack` | ESP → server | Konfirmasi konfigurasi |
 | `pelletq/event` | ESP → server | Event mesin |
 | `pelletq/status` | ESP → server | Status LWT retained |
+
+## Checklist validasi yang ditunda
+
+- [ ] Jalankan pub/sub `ws://<host>:9001` di atas terhadap listener lokal dan
+  catat bahwa payload diterima tanpa path aplikasi pada URI.
+- [ ] Buat Cloudflare Tunnel live untuk `mqtt.<domain>`, lalu verifikasi
+  `wss://mqtt.<domain>` memakai sertifikat publik dan autentikasi Mosquitto.
+- [ ] Flash `firmware/mqtt_test` ke hardware ESP32 nyata, konfirmasi koneksi,
+  LWT retained, heartbeat, subscription command, dan reconnect Wi-Fi/MQTT.
