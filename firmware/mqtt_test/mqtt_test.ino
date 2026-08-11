@@ -28,7 +28,7 @@
 // ---- GANTI SEBELUM UPLOAD -------------------------------------------------
 #define WIFI_SSID      "GANTI_SSID"
 #define WIFI_PASSWORD  "GANTI_PASSWORD"
-#define MQTT_URI       "ws://192.168.1.100:9001/mqtt"
+#define MQTT_URI       "ws://192.168.1.100:9001"
 // ---------------------------------------------------------------------------
 
 #define MQTT_CLIENT_ID   "pelletq-esp32-test"
