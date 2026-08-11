@@ -23,6 +23,7 @@
 #include <WiFi.h>
 #include <esp_event.h>
 #include <esp_mqtt_client.h>
+#include <freertos/FreeRTOS.h>
 
 // ---- GANTI SEBELUM UPLOAD -------------------------------------------------
 #define WIFI_SSID      "GANTI_SSID"
@@ -48,6 +49,14 @@ unsigned long bootMs        = 0;
 uint32_t      heartbeatSeq  = 0;
 bool          mqttConnected = false;
 bool          ledState      = false;
+portMUX_TYPE  commandAckMux = portMUX_INITIALIZER_UNLOCKED;
+unsigned long lastCommandAckToggle = 0;
+uint8_t       commandAckTogglesRemaining = 0;
+
+void setLed(bool on) {
+  ledState = on;
+  digitalWrite(LED_BUILTIN, on);
+}
 
 void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t eventId,
                       void* eventData) {
@@ -62,7 +71,6 @@ void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t eventId,
       esp_mqtt_client_publish(mqttClient, TOPIC_STATUS, "online", 0, 0, true);
       esp_mqtt_client_subscribe(mqttClient, TOPIC_CMD, 0);
       Serial.printf("[mqtt] subscribed %s\n", TOPIC_CMD);
-      digitalWrite(LED_BUILTIN, HIGH);               // nyala tetap = sehat
       break;
 
     case MQTT_EVENT_DISCONNECTED:
@@ -73,6 +81,11 @@ void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t eventId,
     case MQTT_EVENT_DATA:
       Serial.printf("[rx] %.*s : %.*s\n", event->topic_len, event->topic,
                     event->data_len, event->data);
+      // Six non-blocking toggles preserve the historical visual command ack.
+      portENTER_CRITICAL(&commandAckMux);
+      commandAckTogglesRemaining = 6;
+      lastCommandAckToggle = millis() - 60;
+      portEXIT_CRITICAL(&commandAckMux);
       break;
 
     case MQTT_EVENT_ERROR:
@@ -120,7 +133,7 @@ void setup() {
   Serial.println(F("\n[mqtt-test] boot"));
 
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  setLed(false);
 
   WiFi.mode(WIFI_STA);
   delay(100);
@@ -161,11 +174,6 @@ void serviceConnection() {
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     }
-    if (now - lastBlink >= 150) {
-      lastBlink = now;
-      ledState = !ledState;
-      digitalWrite(LED_BUILTIN, ledState);
-    }
     return;
   }
 
@@ -177,10 +185,43 @@ void serviceConnection() {
   }
 
   startMqttClient();
+}
+
+void serviceLed() {
+  unsigned long now = millis();
+  bool toggleCommandAck = false;
+  bool commandAckActive = false;
+
+  portENTER_CRITICAL(&commandAckMux);
+  if (commandAckTogglesRemaining > 0) {
+    commandAckActive = true;
+    if (now - lastCommandAckToggle >= 60) {
+      lastCommandAckToggle = now;
+      commandAckTogglesRemaining--;
+      toggleCommandAck = true;
+    }
+  }
+  portEXIT_CRITICAL(&commandAckMux);
+
+  if (toggleCommandAck) {
+    setLed(!ledState);
+    return;
+  }
+  if (commandAckActive) return;
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (now - lastBlink >= 150) {
+      lastBlink = now;
+      setLed(!ledState);
+    }
+    return;
+  }
+
   if (!mqttConnected && now - lastBlink >= 400) {
     lastBlink = now;
-    ledState = !ledState;
-    digitalWrite(LED_BUILTIN, ledState);
+    setLed(!ledState);
+  } else if (mqttConnected) {
+    setLed(true);                                    // nyala tetap = sehat
   }
 }
 
@@ -205,6 +246,7 @@ extern "C" void app_main(void) {
 
   while (true) {
     serviceConnection();
+    serviceLed();
     serviceHeartbeat();
     delay(1);
   }
