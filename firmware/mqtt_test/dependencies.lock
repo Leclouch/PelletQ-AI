@@ -1,0 +1,123 @@
+dependencies:
+  chmorgan/esp-libhelix-mp3:
+    component_hash: cbb76089dc2c5749f7b470e2e70aedc44c9da519e04eb9a67d4c7ec275229e53
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.0.3
+  espressif/arduino-esp32:
+    component_hash: 24d09ebaba2990281cb54ac3e0ba8fcdd8511c16b24114a4040476ece2949643
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 3.2.0
+  espressif/cbor:
+    component_hash: 440f4ee4504841cc9b4f3a8ef755776a612ac9dace355514c68b999868f990ff
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 0.6.0~1
+  espressif/esp-dsp:
+    component_hash: ed9ac175b14e0414399a2b33c525579414b5bad19a2a67b12ea212def96f9a98
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.8.2
+  espressif/esp-modbus:
+    component_hash: 5d5e90b9e55721a8a194b301ad8102d4affb647f47b74cd413ff7d1ce2c1169c
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.0.18
+  espressif/esp-zboss-lib:
+    component_hash: 2a2256a8d20e5ade59a8e084760c84faa87dc9332523afcb6e245a744420839a
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.6.3
+  espressif/esp-zigbee-lib:
+    component_hash: 73112d38839c7460bd713f9e3a5b2baeab351ee01a4b9091c7df8b50ce524947
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.6.3
+  espressif/esp_diag_data_store:
+    component_hash: c1e5cf62f545d2b136db299f4df1b228b9840be5bc3410c9ad2d2a882b5c0d64
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.0.2
+  espressif/esp_diagnostics:
+    component_hash: 5ea8e8da8217ed9ed778db3973139e726e17cd27ef5cf6429c787d19226c79f3
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.2.1
+  espressif/esp_insights:
+    component_hash: null
+    source:
+      path: /home/wafdan/projects/PKM/PelletQ-AI/firmware/mqtt_test/components/espressif__esp_insights
+      type: local
+    version: '*'
+  espressif/esp_modem:
+    component_hash: 71c9f54fc512c60d93ea9763377ceb1d5b575a4616f3f3344440b97e2a38da29
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.4.3
+  espressif/esp_rainmaker:
+    component_hash: null
+    source:
+      path: /home/wafdan/projects/PKM/PelletQ-AI/firmware/mqtt_test/components/espressif__esp_rainmaker
+      type: local
+    version: '*'
+  espressif/libsodium:
+    component_hash: d4066b373fc6d4c5196db42aeea7faef4ac7f3080af96c2b74e2476c08b78dc1
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.0.22~1
+  espressif/mdns:
+    component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.11.3
+  espressif/mqtt:
+    component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.1.0
+  espressif/network_provisioning:
+    component_hash: ef2e10182fd1861e68b821491916327c25416ca7ae70e5a6e43313dbc71fe993
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.0.2
+  espressif/qrcode:
+    component_hash: 3b493771bc5d6ad30cbf87c25bf784aada8a08c941504355b55d6b75518ed7bc
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 0.1.0~2
+  espressif/rmaker_common:
+    component_hash: a3a1df881278d0351fc850b77792fe8a196ddd6dcacbea203d606329cc6a0239
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.4.6
+  idf:
+    component_hash: null
+    source:
+      type: idf
+    version: 5.4.1
+  joltwallet/littlefs:
+    component_hash: 3af20a3d75c49db9dc2286fd50862c34055c9f578419ad1f2bf7ed3ed01391fe
+    source:
+      service_url: https://api.components.espressif.com/
+      type: service
+    version: 1.22.3
+manifest_hash: 01a1628645b47659b841928ed5dd0595a6259ec62445e3ce15ec64b68d44c7d4
+target: esp32
+version: 1.0.0
