@@ -283,7 +283,7 @@ git commit -m "feat(firmware): port mqtt_test to esp_mqtt_client over WebSocket,
 **Interfaces:**
 - Produces: the confirmed `MQTT_URI` value/path convention that Task 3's `secrets.h` and firmware README use. If Mosquitto turns out to require a specific path (e.g. `/mqtt`) rather than accepting any path, that exact value must be documented here for Task 3 to use verbatim.
 
-- [ ] **Step 1: Bring up the project's Mosquitto container**
+- [x] **Step 1: Bring up the project's Mosquitto container**
 
 ```bash
 cd /home/wafdan/projects/PKM/PelletQ-AI
@@ -291,7 +291,7 @@ docker compose up -d mosquitto
 docker compose ps mosquitto   # confirm it's running
 ```
 
-- [ ] **Step 2: Confirm the container's WS listener config**
+- [x] **Step 2: Confirm the container's WS listener config**
 
 ```bash
 grep -A3 "listener 9001" mosquitto/config/mosquitto.conf
@@ -299,7 +299,9 @@ grep -A3 "listener 9001" mosquitto/config/mosquitto.conf
 
 Expected: `listener 9001` followed by `protocol websockets`, `allow_anonymous false`, `password_file /mosquitto/config/passwd` (this was already confirmed present during the production-deployment work — this step is a sanity check, not new discovery).
 
-- [ ] **Step 3: Attempt a real WebSocket MQTT connection from the dev machine**
+- [x] **Step 3: Attempt a real WebSocket MQTT connection from the dev machine**
+
+Note: the installed `mosquitto_pub`/`mosquitto_sub` (2.1.2) use `--ws`, not `--transport websockets` as drafted above — the flag name changed upstream. Ran with no path against `pelletq/test/transport`; succeeded on the first attempt, confirming the design spec's hypothesis (no path-based routing on this listener).
 
 ```bash
 docker run --rm --network host eclipse-mosquitto:2 \
@@ -312,7 +314,7 @@ docker run --rm --network host eclipse-mosquitto:2 \
 
 Try it first with no path (`-h 127.0.0.1 -p 9001`, which is what the command above does), then, only if that fails, retry with an explicit path by adding `--transport-arg` or an equivalent flag pointing at `/mqtt` — the design spec's hypothesis is that a native `protocol websockets` listener does not do path-based routing at all, so the no-path case is expected to succeed.
 
-- [ ] **Step 4: Record the result**
+- [x] **Step 4: Record the result**
 
 Document the outcome directly in `firmware/pelletq_esp32/README.md`'s transport section: replace the sentence "Detail library MQTT... nilai koneksi di bawah adalah target akhir, bukan kode yang sudah diuji" (added during the Cloudflare Tunnel migration) with a factual statement of what path/URI actually worked, e.g. "Dikonfirmasi: listener 9001 menerima koneksi WebSocket tanpa memerlukan path tertentu — `ws://<host>:9001` cukup."
 

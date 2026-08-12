@@ -15,11 +15,10 @@ murni, bentuk URI lokal yang diharapkan adalah:
 ws://<host>:9001
 ```
 
-Jangan tambahkan path aplikasi seperti `/mqtt`. Endpoint itu masih **belum
-terverifikasi pada runtime** di workspace ini: Docker daemon tidak dapat diakses
-dan tidak ada klien MQTT-over-WebSocket yang tersedia. Jalankan prosedur
-validasi berikut setelah broker, password file, dan klien tersedia; baru gunakan
-URI tersebut pada perangkat.
+Jangan tambahkan path aplikasi seperti `/mqtt`. **Dikonfirmasi pada runtime**
+(pub/sub `mosquitto_pub`/`mosquitto_sub --ws` lewat container `eclipse-mosquitto:2`
+terhadap `pelletq-mosquitto` lokal): listener 9001 menerima koneksi WebSocket
+tanpa memerlukan path tertentu — `ws://<host>:9001` cukup.
 
 ### Validasi lokal yang dapat diulang
 
@@ -43,7 +42,7 @@ Validasi berhasil bila Terminal 1 menerima payload `websocket-ok` pada
 `pelletq/test/transport`. Bila URI endpoint dapat dikonfigurasi sebagai satu
 nilai oleh klien, gunakan `ws://127.0.0.1:9001` tanpa path.
 
-## Target WebSocket TLS produksi (masih ditunda)
+## WebSocket TLS produksi
 
 Simpan kredensial WiFi dan MQTT di `secrets.h` yang tidak di-commit. Untuk
 target produksi, ESP32 akan menggunakan WebSocket aman pada domain TLS:
@@ -62,14 +61,12 @@ Gunakan default ESP-IDF certificate bundle untuk memvalidasi sertifikat publik
 (misalnya melalui `esp_crt_bundle_attach` pada konfigurasi transport TLS).
 Jangan menyalin atau mem-pin sertifikat ke `ca_cert.h`.
 
-Konfigurasi repository saat ini **belum** menyediakan endpoint tersebut:
-Mosquitto mengekspos listener TLS MQTT mentah pada port 8883, sedangkan Caddy
-hanya merespons HTTP pada `MQTT_DOMAIN`. Belum ada Cloudflare Tunnel atau proxy
-WebSocket yang meneruskan `wss://mqtt.<domain>` ke listener 9001. Dengan
-demikian, `wss://mqtt.<domain>` di atas adalah konfigurasi koneksi akhir yang
-diinginkan, bukan endpoint yang sudah live. Setelah tunnel/proxy WebSocket
-diaktifkan dan diverifikasi, ESP32 di jaringan lain harus memakai endpoint itu;
-listener 1883 dan WebSocket 9001 tetap localhost-only.
+**Endpoint ini sudah live dan terverifikasi.** Cloudflare Tunnel (`cloudflared`,
+lihat `docker-compose.yml`) meneruskan `wss://mqtt.pelletqai.com` ke listener
+9001 Mosquitto. Pub/sub lewat sertifikat publik Cloudflare (tanpa `--insecure`,
+tanpa CA pinning) dan autentikasi Mosquitto (`password_file`) sudah dites dan
+berhasil. Listener 1883 dan WebSocket 9001 tetap localhost-only di server —
+hanya dapat dicapai lewat tunnel ini.
 
 ## Menyiapkan broker
 
@@ -109,11 +106,12 @@ listener 1883 dan WebSocket 9001 tetap localhost-only.
 
 ## Checklist validasi yang ditunda
 
-- [ ] Jalankan pub/sub `ws://<host>:9001` di atas terhadap listener lokal dan
+- [x] Jalankan pub/sub `ws://<host>:9001` di atas terhadap listener lokal dan
   catat bahwa payload diterima tanpa path aplikasi pada URI.
-- [ ] Buat Cloudflare Tunnel atau proxy WebSocket yang meneruskan
+- [x] Buat Cloudflare Tunnel atau proxy WebSocket yang meneruskan
   `wss://mqtt.<domain>` ke listener 9001, lalu verifikasi sertifikat publik
-  dan autentikasi Mosquitto. Listener 8883 saat ini adalah MQTT TLS mentah,
-  bukan target WebSocket TLS ini.
+  dan autentikasi Mosquitto. Dikonfirmasi: `wss://mqtt.pelletqai.com:443`
+  pub/sub berhasil lewat sertifikat publik Cloudflare (tanpa `--insecure`,
+  tanpa CA pinning), dengan autentikasi Mosquitto (`password_file`) aktif.
 - [ ] Flash `firmware/pelletq_esp32` ke hardware ESP32 nyata, konfirmasi koneksi,
   LWT retained, heartbeat, subscription command, dan reconnect Wi-Fi/MQTT.
