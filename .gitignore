@@ -12,39 +12,89 @@
 
 # testing
 /coverage
+/coverage/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+*.log
+logs/
+coverage/
+playwright-report/
+test-results/
 
 # next.js
 /.next/
 /out/
+/.vercel/
+/build/
+/dist/
 
 # production
-/build
+build/
+dist/
 
-# misc
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# secrets / credentials
+.env*
+!.env.example
 *.pem
+firmware/**/secrets.h
+mosquitto/config/passwd
+mosquitto/config/*.key
+mosquitto/config/*.crt
+mosquitto/certs/
+
+# firmware / embedded build artifacts
+**/.pio/
+**/.pioenvs/
+**/.piolibdeps/
+**/libdeps/
+**/.clangd/
+**/compile_commands.json
+**/build/
+firmware/**/build/
+firmware/**/.cache/
+
+# ESP-IDF component manager cache (regenerated from idf_component.yml + dependencies.lock)
+firmware/**/managed_components/
+
+# ESP-IDF per-environment generated sdkconfig (regenerated from sdkconfig.defaults)
+firmware/**/sdkconfig.*
+!firmware/**/sdkconfig.defaults
+
+# database / local data
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+prisma/*.db*
+
+# project-local generated files
 .claude/
 .superpowers/
 .worktrees/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# firmware secrets (WiFi/MQTT credentials)
-firmware/**/secrets.h
-
-# mosquitto secrets (broker password file + local dev certs)
-mosquitto/config/passwd
-mosquitto/certs/
-
-# vercel
+# vercel / deploy
 .vercel
 
 # typescript
@@ -54,6 +104,10 @@ next-env.d.ts
 # test session cookie jar
 test/cookies.txt
 
-.claude/
-.superpowers/
-.worktrees/
+# package manager / debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
