@@ -65,8 +65,11 @@ Jangan menyalin atau mem-pin sertifikat ke `ca_cert.h`.
 lihat `docker-compose.yml`) meneruskan `wss://mqtt.pelletqai.com` ke listener
 9001 Mosquitto. Pub/sub lewat sertifikat publik Cloudflare (tanpa `--insecure`,
 tanpa CA pinning) dan autentikasi Mosquitto (`password_file`) sudah dites dan
-berhasil. Listener 1883 dan WebSocket 9001 tetap localhost-only di server —
-hanya dapat dicapai lewat tunnel ini.
+berhasil. Secara desain, listener 1883 dan WebSocket 9001 dimaksudkan sebagai
+localhost-only di server dan hanya dapat dicapai dari luar lewat tunnel ini —
+tapi lihat catatan keamanan di `docs/DEPLOYMENT.md`/`README.md`: dengan
+`network_mode: host`, keduanya saat ini listen di semua interface (`0.0.0.0`)
+kecuali dibind eksplisit ke `127.0.0.1` atau dibatasi firewall host.
 
 ## Menyiapkan broker
 

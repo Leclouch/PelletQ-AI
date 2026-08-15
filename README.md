@@ -73,14 +73,27 @@ aktif di server yang sama, contohnya:
 ## Deploy ke Server Sendiri (VPS)
 
 Aplikasi produksi berjalan melalui Docker Compose: Postgres, Mosquitto, Adminer,
-Next.js, dan cloudflared. Server ini boleh berada di belakang CGNAT / tanpa IP
-publik — tidak ada port yang perlu di-forward di router. cloudflared membuka
-koneksi keluar ke Cloudflare Tunnel dan meneruskan trafik dari dua public
-hostname (nilai APP_DOMAIN dan MQTT_DOMAIN, dikonfigurasi di dashboard
-Cloudflare, bukan di .env) ke app:3000 dan mosquitto:9001 lewat jaringan Docker
-internal. Cloudflare menangani TLS di edge (sertifikat publik dari CA yang
-umum dipercaya) — tidak ada sertifikat yang perlu dikelola atau diperbarui di
-server.
+Next.js, dan cloudflared. Semua container memakai `network_mode: host` (dibutuhkan
+supaya stabil di host referensi deployment ini, WSL2) — setiap service saling
+menjangkau lewat `localhost`, bukan nama container di jaringan Docker. Server
+ini boleh berada di belakang CGNAT / tanpa IP publik — tidak ada port yang
+perlu di-forward di router. cloudflared membuka koneksi keluar ke Cloudflare
+Tunnel dan meneruskan trafik dari dua public hostname (nilai APP_DOMAIN dan
+MQTT_DOMAIN, dikonfigurasi di dashboard Cloudflare, bukan di .env) ke
+localhost:3001 (app, port diatur lewat env `PORT` di docker-compose.yml) dan
+localhost:9001 (mosquitto) lewat host network. Cloudflare menangani TLS di
+edge (sertifikat publik dari CA yang umum dipercaya) — tidak ada sertifikat
+yang perlu dikelola atau diperbarui di server.
+
+> **Catatan keamanan:** karena `network_mode: host` tidak membatasi bind
+> address masing-masing service, Postgres (5432), MQTT (1883/9001), dan
+> Adminer (8080 — bukan 8081, remap port `ports:` tidak berlaku di bawah
+> `network_mode: host`) saat ini listen di semua interface (`0.0.0.0`), bukan
+> cuma loopback. Ini beda dari setup jaringan bridge Docker biasa. Sebelum
+> mengekspos host ini ke jaringan yang tidak dipercaya, tambahkan aturan
+> firewall host untuk port-port itu, atau bind eksplisit tiap service ke
+> `127.0.0.1` (`listen_addresses` Postgres, `listener <port> 127.0.0.1` di
+> `mosquitto.conf`, `command` Adminer, env `HOSTNAME` app).
 
 ### 1. Setup server (sekali saja)
 
@@ -105,8 +118,8 @@ server.
 
     | Public hostname | Service |
     |---|---|
-    | domain app (nilai APP_DOMAIN, mis. app.pelletqai.com) | http://app:3000 |
-    | domain MQTT (nilai MQTT_DOMAIN, mis. mqtt.pelletqai.com) | http://mosquitto:9001 |
+    | domain app (nilai APP_DOMAIN, mis. app.pelletqai.com) | http://localhost:3001 |
+    | domain MQTT (nilai MQTT_DOMAIN, mis. mqtt.pelletqai.com) | http://localhost:9001 |
 
 6. Nyalakan stack:
 
@@ -136,8 +149,12 @@ menerapkan migrasi Prisma.
 - [ ] MQTT_USERNAME/MQTT_PASSWORD diganti dari kredensial dev.
 - [ ] TUNNEL_TOKEN rahasia dan tidak di-commit.
 - [ ] Tidak ada port yang dibuka manual di firewall/router — cloudflared
-      cuma membuat koneksi keluar ke Cloudflare. Postgres, MQTT plain,
-      WebSocket MQTT, dan Adminer tetap loopback-only di docker-compose.yml.
+      cuma membuat koneksi keluar ke Cloudflare. **Catatan:** beda dengan
+      setup jaringan bridge, `network_mode: host` tidak otomatis membatasi
+      Postgres, MQTT plain, WebSocket MQTT, atau Adminer ke loopback (lihat
+      catatan keamanan di atas) — tambahkan aturan firewall host atau bind
+      `127.0.0.1` eksplisit sendiri kalau host bisa dijangkau dari jaringan
+      yang tidak dipercaya.
 
 ### Verifikasi setelah deploy pertama
 
@@ -146,8 +163,9 @@ menerapkan migrasi Prisma.
       error mengenai public hostname.
 - [ ] ESP32 (atau client MQTT WebSocket lain) dapat connect ke
       wss://<MQTT_DOMAIN> dan publish/subscribe topik pelletq/*.
-- [ ] Dari luar server, port 5432, 1883, 9001, dan 8081 gagal diakses
-      langsung — hanya lewat tunnel yang bisa dijangkau.
+- [ ] Dari luar server, port 5432, 1883, 9001, dan 8080 gagal diakses
+      langsung — hanya lewat tunnel yang bisa dijangkau. **Saat ini item ini
+      tidak akan lolos secara default** — lihat catatan keamanan di atas.
 
 ## Perintah berguna
 
@@ -171,7 +189,7 @@ menerapkan migrasi Prisma.
 - Public hostname tidak bisa diakses dari luar: cek
   docker compose logs cloudflared — pastikan TUNNEL_TOKEN benar dan kedua
   public hostname di dashboard Cloudflare mengarah ke service yang tepat
-  (http://app:3000 dan http://mosquitto:9001).
+  (http://localhost:3001 dan http://localhost:9001).
 
 ## Tech Stack
 

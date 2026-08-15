@@ -31,6 +31,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  outputFileTracingIncludes: {
+    "/**": [
+      "./node_modules/.pnpm/@prisma+adapter-pg*/**/*",
+      "./node_modules/.pnpm/bcryptjs*/**/*",
+      "./node_modules/.pnpm/mqtt*/**/*",
+      "./node_modules/.pnpm/javascript-lp-solver*/**/*",
+    ],
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

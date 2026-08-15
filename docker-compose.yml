@@ -3,12 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: pelletq-postgres
     restart: unless-stopped
+    network_mode: host
     environment:
       POSTGRES_USER: pelletq
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pelletq_dev_password}
       POSTGRES_DB: pelletq
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,11 +20,7 @@ services:
     image: eclipse-mosquitto:2
     container_name: pelletq-mosquitto
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:1883:1883"   # MQTT plain — lokal only, dipakai Next.js server di host yang sama
-      - "127.0.0.1:9001:9001"   # WebSocket plain — lokal only. ESP32 mencapai listener ini lewat
-                                 # cloudflared di jaringan Docker internal (mosquitto:9001), bukan
-                                 # lewat mapping port ini; mapping ini cuma untuk debug dari host.
+    network_mode: host
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - mosquitto_data:/mosquitto/data
@@ -35,8 +30,7 @@ services:
     image: adminer:latest
     container_name: pelletq-adminer
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8081:8080"
+    network_mode: host
     depends_on:
       - postgres
 
@@ -44,12 +38,15 @@ services:
     build:
       context: .
       target: runtime
+      network: host
     container_name: pelletq-app
     restart: unless-stopped
+    network_mode: host
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@localhost:5432/pelletq?schema=public
+      MQTT_BROKER_URL: mqtt://localhost:1883
+      PORT: "3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,9 +55,11 @@ services:
     build:
       context: .
       target: build
+      network: host
+    network_mode: host
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@localhost:5432/pelletq?schema=public
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +70,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: pelletq-cloudflared
     restart: unless-stopped
+    network_mode: host
     command: tunnel run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}

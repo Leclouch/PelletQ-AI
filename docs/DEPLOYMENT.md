@@ -9,20 +9,38 @@ explanation for a first-time deploy.
 
 ## What you're setting up
 
-Five containers, managed by one `docker-compose.yml`:
+Five containers, managed by one `docker-compose.yml`, all running with
+`network_mode: host` (needed to get this working reliably on the reference
+deployment host, WSL2) — every container shares the host's network stack
+directly instead of a Docker bridge network, so services reach each other via
+`localhost`, not container names:
 
-| Service       | What it does                          | Reachable from |
+| Service       | What it does                          | Listens on (host) |
 |---------------|----------------------------------------|-----------------|
-| `postgres`    | Main database                          | localhost only |
-| `mosquitto`   | MQTT broker the ESP32 talks to         | localhost only — reached from outside via `cloudflared`, not a published port |
-| `adminer`     | DB admin UI                            | localhost only |
-| `app`         | The Next.js app itself                 | not published — only reachable through `cloudflared` |
+| `postgres`    | Main database                          | `5432` |
+| `mosquitto`   | MQTT broker the ESP32 talks to         | `1883` (plain MQTT), `9001` (MQTT over WebSocket) — reached from outside via `cloudflared` |
+| `adminer`     | DB admin UI                            | `8080` |
+| `app`         | The Next.js app itself                 | `3001` (set via `PORT` in `docker-compose.yml`) — reached from outside via `cloudflared` |
 | `cloudflared` | Cloudflare Tunnel client               | makes outbound connections only; nothing to publish |
+
+> **Known gap:** because these containers use `network_mode: host` and none
+> of postgres/mosquitto/adminer/app currently bind explicitly to `127.0.0.1`,
+> they listen on **all** host network interfaces (`0.0.0.0`), not just
+> loopback. Docker's own `ports:`-based loopback binding (`127.0.0.1:PORT:PORT`)
+> has no effect under `network_mode: host` — it's simply not consulted. On the
+> reference deployment host this is only currently safe if the host's own
+> firewall (or its exposure to the network) blocks inbound connections to
+> those ports from anything other than the machine itself. If you deploy this
+> way, either add host firewall rules for those ports, or bind each service to
+> `127.0.0.1` (Postgres's `listen_addresses`, Mosquitto's `listener <port>
+> 127.0.0.1` in `mosquitto.conf`, Adminer's startup `command`, and the app's
+> `HOSTNAME` env var) before exposing the host to any untrusted network.
 
 There is no reverse proxy or certificate manager running on the server.
 `cloudflared` opens an outbound connection to Cloudflare's edge and Cloudflare
-routes two public hostnames to it: your app's domain to `app:3000`, and your
-MQTT domain to `mosquitto:9001` (Mosquitto's WebSocket listener). Cloudflare
+routes two public hostnames to it: your app's domain to `localhost:3001`, and
+your MQTT domain to `localhost:9001` (Mosquitto's WebSocket listener) — both
+reached over the host network, not Docker's internal DNS. Cloudflare
 terminates TLS at its edge using its own publicly-trusted certificate — you
 never request, renew, or manage a certificate yourself. Because the tunnel is
 outbound-only, this works even if the server has no public IP and sits behind
@@ -106,13 +124,14 @@ Still in the tunnel's configuration screen, under **Public Hostnames**, add:
 
 | Public hostname | Service |
 |---|---|
-| `app.yourdomain.com` (your real `APP_DOMAIN`) | `http://app:3000` |
-| `mqtt.yourdomain.com` (your real `MQTT_DOMAIN`) | `http://mosquitto:9001` |
+| `app.yourdomain.com` (your real `APP_DOMAIN`) | `http://localhost:3001` |
+| `mqtt.yourdomain.com` (your real `MQTT_DOMAIN`) | `http://localhost:9001` |
 
-The service field uses Docker Compose service names — `cloudflared` reaches
-`app` and `mosquitto` by name over the internal Docker network, the same way
-they reach `postgres`. Saving these hostnames is what makes Cloudflare create
-the DNS records automatically; there is no separate DNS step.
+The service field targets `localhost` because every container, including
+`cloudflared`, runs with `network_mode: host` and shares the host's network
+stack — there is no internal Docker network for `cloudflared` to resolve
+container names against. Saving these hostnames is what makes Cloudflare
+create the DNS records automatically; there is no separate DNS step.
 
 ## 6. Start the stack
 
@@ -143,9 +162,11 @@ service only ever runs on-demand like this — it never starts on its own.
   about the public hostnames.
 - An MQTT client that supports WebSocket transport can connect to
   `wss://<MQTT_DOMAIN>` and publish/subscribe on the `pelletq/*` topics.
-- From outside the server, ports 5432, 1883, 9001, and 8081 all fail to
-  connect directly (confirms the loopback bindings are working and nothing
-  is reachable except through the tunnel).
+- From outside the server, ports 5432, 1883, 9001, and 8080 should fail to
+  connect directly. **As shipped, this will not pass** — see the "Known gap"
+  note above; these ports are host-wide (`0.0.0.0`) under `network_mode: host`
+  unless you've added firewall rules or bound each service to `127.0.0.1`
+  yourself.
 
 ## Deploying future changes
 
@@ -171,17 +192,21 @@ reconnects to Cloudflare automatically.
 - [ ] `MQTT_USERNAME`/`MQTT_PASSWORD` changed from dev/bench credentials
 - [ ] `TUNNEL_TOKEN` is secret and not committed anywhere
 - [ ] No ports opened manually in any firewall or router — `cloudflared`
-      only makes outbound connections. Postgres, plain MQTT, MQTT WebSocket,
-      and Adminer stay loopback-only in `docker-compose.yml`.
+      only makes outbound connections. **Note:** unlike a bridge-network
+      setup, `network_mode: host` does not loopback-restrict Postgres, plain
+      MQTT, MQTT WebSocket, or Adminer by itself (see "Known gap" above) —
+      you must add host firewall rules or explicit `127.0.0.1` binds for
+      those services yourself if the host is reachable from any untrusted
+      network.
 
 ## Troubleshooting
 
 - **`https://<APP_DOMAIN>` doesn't load** — check
   `docker compose logs cloudflared` first. Confirm the public hostname in
-  the Cloudflare dashboard points at `http://app:3000` exactly, and that
+  the Cloudflare dashboard points at `http://localhost:3001` exactly, and that
   `app` is actually running (`docker compose ps`).
 - **MQTT WebSocket client can't connect** — same idea: check the
-  `mqtt.yourdomain.com` → `http://mosquitto:9001` mapping in the dashboard,
+  `mqtt.yourdomain.com` → `http://localhost:9001` mapping in the dashboard,
   and confirm Mosquitto's `mosquitto.conf` still has `listener 9001` with
   `protocol websockets`.
 - **App can't reach the database** — `docker compose ps` should show
