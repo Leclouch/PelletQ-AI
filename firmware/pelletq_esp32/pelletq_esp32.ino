@@ -38,11 +38,10 @@
  *         #define LOAD_GFXFF
  *
  * ----------------------------------------------------------------------------
- * SHARED SPI BUS — ATURAN KRITIS:
- *   TFT (MOSI13/SCK18) dan MAX6675 (SCK18/SO19) berbagi bus VSPI + SCK GPIO18.
- *   MAX6675 dibaca MANUAL lewat hardware SPI yang sama (lihat readMax6675Raw).
- *   JANGAN pakai library MAX6675 bit-bang (software SPI) — pinMode/digitalWrite
- *   pada GPIO18 akan melepas pin dari peripheral SPI dan merusak TFT.
+ * SPI BUS:
+ *   TFT pakai VSPI (MOSI13/SCK18/CS5), MAX6675 pakai HSPI-nya sendiri
+ *   (SCK25/SO34/CS26) — dua bus hardware SPI terpisah, tidak berbagi pin.
+ *   MAX6675 dibaca MANUAL lewat hardware SPI (lihat readMax6675Raw).
  * ----------------------------------------------------------------------------
  * BENCH TEST (serial, tanpa WiFi/MQTT) — ketik di Serial Monitor @115200:
  *   start        - sama seperti command MQTT "start" (IDLE -> HEATING)
@@ -85,8 +84,9 @@
 #define PIN_TFT_DC   2
 #define PIN_TFT_MOSI 13
 #define PIN_TFT_SCK  18
-#define PIN_MAX_SO   19    // MAX6675 SO (MISO) — pin default VSPI MISO
-#define PIN_MAX_CS   15
+#define PIN_MAX_SCK  25
+#define PIN_MAX_SO   34    // MAX6675 SO (MISO) — GPIO34 (input-only, ADC1_CH6)
+#define PIN_MAX_CS   26
 #define PIN_SERVO    27
 
 // ============================================================================
@@ -184,6 +184,9 @@ QueueHandle_t mqttInboundQueue = nullptr;
 // Display
 TFT_eSPI tft = TFT_eSPI();
 
+// MAX6675 — bus HSPI sendiri, terpisah dari VSPI milik TFT
+SPIClass maxSpi(HSPI);
+
 // Interval loop
 unsigned long lastTempMs      = 0;
 unsigned long lastTelemetryMs = 0;
@@ -227,19 +230,17 @@ void setup() {
   if (mqttInboundQueue == nullptr)
     Serial.println(F("[mqtt] inbound queue initialization failed"));
 
-  // MAX6675 CS harus siap SEBELUM tft.init() (aturan shared bus).
+  // MAX6675 CS idle HIGH sebelum bus-nya diinisialisasi.
   pinMode(PIN_MAX_CS, OUTPUT);
   digitalWrite(PIN_MAX_CS, HIGH);
 
   // Inisialisasi TFT (TFT_eSPI meng-init VSPI dengan TFT_MISO = -1).
   tft.init();
-  tft.setRotation(1);            // landscape 480x320
+  tft.setRotation(3);            // landscape 480x320, flipped 180 deg
   tft.fillScreen(TFT_BLACK);
 
-  // Setelah TFT init, pastikan MISO GPIO19 terpasang pada bus VSPI supaya
-  // MAX6675 bisa dibaca. TFT menulis saja (tidak pernah membaca MISO), jadi
-  // menambahkan MISO=19 aman untuk TFT.
-  SPI.begin(PIN_TFT_SCK, PIN_MAX_SO, PIN_TFT_MOSI, -1);
+  // Bus HSPI khusus MAX6675 — read-only, jadi MOSI tidak dipakai (-1).
+  maxSpi.begin(PIN_MAX_SCK, PIN_MAX_SO, -1, -1);
 
   // Header statis (tidak pernah berubah)
   tft.setFreeFont(&FreeSansBold12pt7b);
@@ -322,15 +323,15 @@ void loop() {
 }
 
 // ============================================================================
-// SUHU — MAX6675 dibaca manual lewat hardware SPI yang di-share dengan TFT
+// SUHU — MAX6675 dibaca manual lewat bus HSPI dedicated (maxSpi)
 // ============================================================================
 uint16_t readMax6675Raw() {
-  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  maxSpi.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
   digitalWrite(PIN_MAX_CS, LOW);
   delayMicroseconds(1);
-  uint16_t v = SPI.transfer16(0x0000);
+  uint16_t v = maxSpi.transfer16(0x0000);
   digitalWrite(PIN_MAX_CS, HIGH);
-  SPI.endTransaction();
+  maxSpi.endTransaction();
   return v;
 }
 
@@ -338,6 +339,7 @@ void readTemperature() {
   if (tempOverrideActive) return;    // suhu dikunci manual, jangan baca sensor
 
   uint16_t raw = readMax6675Raw();
+  Serial.printf("[max6675] raw=0x%04X\n", raw);   // TODO: hapus setelah debug selesai
 
   // Bit D2 = 1 -> thermocouple lepas
   if (raw & 0x0004) {

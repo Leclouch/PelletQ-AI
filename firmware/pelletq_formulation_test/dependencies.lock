@@ -197,7 +197,7 @@ dependencies:
   espressif/esp_insights:
     dependencies: []
     source:
-      path: D:\PKM\PelletQ-AI\firmware\pelletq_esp32\components\espressif__esp_insights
+      path: D:\PKM\PelletQ-AI\firmware\pelletq_formulation_test\components\espressif__esp_insights
       type: local
     version: '*'
   espressif/esp_modem:
@@ -213,7 +213,7 @@ dependencies:
   espressif/esp_rainmaker:
     dependencies: []
     source:
-      path: D:\PKM\PelletQ-AI\firmware\pelletq_esp32\components\espressif__esp_rainmaker
+      path: D:\PKM\PelletQ-AI\firmware\pelletq_formulation_test\components\espressif__esp_rainmaker
       type: local
     version: '*'
   espressif/libsodium:

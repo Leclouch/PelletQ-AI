@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
 import StickyFooter from '@/components/ui/StickyFooter';
@@ -17,11 +20,30 @@ function batchInstruksi(b: { batchSizeKg: number; jumlahBatchPenuh: number; sisa
   return parts.join(' ') || `1 batch ${b.batchSizeKg} kg`;
 }
 
+type KirimStatus = 'idle' | 'sending' | 'sent' | 'error';
+
 export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
   const res = entry.result;
   const sniOk = res.validasiSni.statusKeseluruhan === 'SESUAI';
   const pasar = PASAR_PRICE[entry.fase] ?? 12500;
   const hemat = Math.max(0, pasar - entry.biayaPerKg);
+
+  const [kirimStatus, setKirimStatus] = useState<KirimStatus>('idle');
+
+  async function kirimKeMesin() {
+    setKirimStatus('sending');
+    try {
+      const r = await fetch('/api/formulation/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchInfo: res.batchInfo, resepPerBatch: res.resepPerBatch }),
+      });
+      if (!r.ok) throw new Error();
+      setKirimStatus('sent');
+    } catch {
+      setKirimStatus('error');
+    }
+  }
 
   const mesinParams = [
     { label: 'Suhu Heater', val: `${res.parameterMesin.suhuHeaterCelcius} °C` },
@@ -188,10 +210,38 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
 
       <StickyFooter>
         <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px 20px', borderRadius: 14, background: '#fff', border: '1.5px solid #E2DDCE', color: '#46554E', fontSize: 15, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>Beranda</button>
-        <button disabled style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, padding: 15, borderRadius: 14, background: '#E8E2D4', color: '#A6AFA7', fontSize: 15.5, fontWeight: 800, cursor: 'not-allowed', position: 'relative' }}>
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
-          Kirim ke Mesin
-          <span style={{ position: 'absolute', top: -9, right: 12, fontSize: 9.5, fontWeight: 800, background: '#C99A3A', color: '#fff', padding: '2px 7px', borderRadius: 999, letterSpacing: '.03em' }}>SEGERA</span>
+        <button
+          onClick={kirimKeMesin}
+          disabled={kirimStatus === 'sending'}
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 9,
+            padding: 15,
+            borderRadius: 14,
+            fontSize: 15.5,
+            fontWeight: 800,
+            cursor: kirimStatus === 'sending' ? 'wait' : 'pointer',
+            border: 'none',
+            background:
+              kirimStatus === 'sent' ? '#1A8A5E' : kirimStatus === 'error' ? '#C24B3A' : '#11623F',
+            color: '#fff',
+          }}
+        >
+          {kirimStatus === 'sending' ? (
+            'Mengirim…'
+          ) : kirimStatus === 'sent' ? (
+            <>✓ Terkirim ke Mesin</>
+          ) : kirimStatus === 'error' ? (
+            <>⚠ Gagal, coba lagi</>
+          ) : (
+            <>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
+              Kirim ke Mesin
+            </>
+          )}
         </button>
       </StickyFooter>
     </AppShell>
