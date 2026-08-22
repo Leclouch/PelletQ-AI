@@ -98,9 +98,10 @@
 #define PIN_MAX_SO   34    // MAX6675 SO (MISO) — GPIO34 (input-only, ADC1_CH6)
 #define PIN_MAX_CS   26
 #define PIN_SERVO    27
-#define PIN_HEATER   3     // relay pemanas — CATATAN: GPIO3 = UART0 RX (dipakai
-                           // Serial Monitor via USB). Kalau upload/serial jadi
-                           // aneh setelah relay dicolok, pindahkan ke GPIO lain.
+#define PIN_HEATER   33    // relay pemanas — GPIO33: bukan strapping pin, bukan
+                           // UART, bukan input-only, tidak konflik dengan pin
+                           // lain di atas. (Sebelumnya GPIO3/UART0 RX — bentrok
+                           // dengan Serial Monitor USB, lihat riwayat commit.)
 
 // Sebagian besar modul relay 1-channel murah aktif-LOW (LOW = kontak nyala).
 // Ganti ke false kalau modul relaymu aktif-HIGH.
@@ -123,8 +124,8 @@
 // ============================================================================
 struct Config {
   float thresholdTemp  = 95.0f;   // suhu ambang mulai siklus buka/tutup (C)
-  int   openSeconds    = 10;      // durasi servo buka tiap siklus (detik)
-  int   closeSeconds   = 10;      // durasi servo tutup tiap siklus (detik)
+  int   openSeconds    = 5;       // durasi servo buka tiap siklus (detik)
+  int   closeSeconds   = 5;       // durasi servo tutup tiap siklus (detik)
   int   servoOpenAngle = 90;      // sudut servo saat buka
   int   servoCloseAngle= 0;       // sudut servo saat tutup
   bool  autoStart      = true;    // jalan otomatis begitu menyala? (matikan via config kalau perlu bench manual)
@@ -232,6 +233,7 @@ void openHopper();
 void closeHopper();
 void setHeater(bool on);
 void updateHeaterControl();
+bool isMinyakIkan(const char* name);
 
 // ============================================================================
 // SETUP
@@ -788,6 +790,15 @@ constexpr unsigned long SCROLL_INTERVAL_MS = 1800;
 int           scrollOffset  = 0;
 unsigned long lastScrollMs  = 0;
 
+// Minyak Ikan ditampilkan dalam ml, bukan kg — murni tampilan (sama seperti
+// di layar hasil web, lihat MINYAK_IKAN_DENSITY_KG_PER_L di lib/constants.ts
+// sisi web). Formulasi yang diterima lewat MQTT tetap kg apa adanya di
+// formulationIngredients[].kg; konversi cuma terjadi di baris TFT ini.
+constexpr float MINYAK_IKAN_DENSITY_KG_PER_L = 0.92f;
+bool isMinyakIkan(const char* name) {
+  return strcmp(name, "Minyak Ikan") == 0;
+}
+
 void updateDisplay() {
   static String prevTemp            = "";
   static String prevPhaseLabel      = "";
@@ -915,9 +926,15 @@ void updateDisplay() {
       int shown = (ingredientCount < SCROLL_VISIBLE_ROWS) ? ingredientCount : SCROLL_VISIBLE_ROWS;
       for (int i = 0; i < shown; i++) {
         int idx = (scrollOffset + i) % ingredientCount;   // jendela geser
+        const char* nm = formulationIngredients[idx].name;
+        float kg = formulationIngredients[idx].kg;
         char row[40];
-        snprintf(row, sizeof(row), "%-16s %5.2f kg",
-                 formulationIngredients[idx].name, formulationIngredients[idx].kg);
+        if (isMinyakIkan(nm)) {
+          float ml = (kg * 1000.0f) / MINYAK_IKAN_DENSITY_KG_PER_L;
+          snprintf(row, sizeof(row), "%-16s %5.0f ml", nm, ml);
+        } else {
+          snprintf(row, sizeof(row), "%-16s %5.2f kg", nm, kg);
+        }
         tft.drawString(row, 6, rowY);
         rowY += 24;
       }

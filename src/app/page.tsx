@@ -8,7 +8,7 @@ import ResultScreen from '@/components/screens/ResultScreen';
 import IngredientsScreen from '@/components/screens/IngredientsScreen';
 import HelpScreen from '@/components/screens/HelpScreen';
 import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult, Diagnosa } from '@/lib/types';
-import { DEFAULT_FORM, PHASE_MAP } from '@/lib/constants';
+import { DEFAULT_FORM, PHASE_MAP, MANDATORY_INGREDIENT_NAMES } from '@/lib/constants';
 import { todayStr, getDefaultBahan } from '@/lib/helpers';
 
 export default function HomePage() {
@@ -106,16 +106,28 @@ export default function HomePage() {
     if (step <= 1) { goDash(); } else { setStep(s => s - 1); scrollTo(0, 0); }
   };
 
+  const missingMandatory = (bahan: FormData['bahan']) =>
+    MANDATORY_INGREDIENT_NAMES.filter(name => !bahan.some(b => b.nama === name));
+
   const nextStep = async () => {
     // Validasi bahan saat pindah dari langkah Bahan Baku (2) ke Ringkasan (3).
-    if (step === 2 && form.bahan.filter(b => b.ingredientId).length < 3) {
-      setApiError('Minimal 3 bahan baku harus dipilih.');
-      return;
+    if (step === 2) {
+      if (form.bahan.filter(b => b.ingredientId).length < 3) {
+        setApiError('Minimal 3 bahan baku harus dipilih.');
+        return;
+      }
+      const missing = missingMandatory(form.bahan);
+      if (missing.length > 0) {
+        setApiError(`Bahan wajib belum dipilih: ${missing.join(', ')}.`);
+        return;
+      }
     }
     if (step < 3) { setStep(s => s + 1); scrollTo(0, 0); setApiError(null); return; }
 
     const validBahan = form.bahan.filter(b => b.ingredientId);
     if (validBahan.length < 3) { setApiError('Minimal 3 bahan baku harus dipilih.'); return; }
+    const missingAtSubmit = missingMandatory(validBahan);
+    if (missingAtSubmit.length > 0) { setApiError(`Bahan wajib belum dipilih: ${missingAtSubmit.join(', ')}.`); return; }
     if (!fishSpeciesId) { setApiError('Data spesies belum termuat. Coba refresh halaman.'); return; }
 
     setComputing(true); setApiError(null); setDiagnosa(null); setPenjelasanGagal(null);
