@@ -213,7 +213,8 @@ export default function HomePage() {
       form={form} step={step} ingredients={ingredients}
       computing={computing} apiError={apiError} diagnosa={diagnosa} penjelasanGagal={penjelasanGagal}
       openBahan={openBahan} openBahanDetails={openBahanDetails}
-      onGoDash={goDash} onPrevStep={prevStep} onNextStep={nextStep}
+      onGoDash={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout}
+      onPrevStep={prevStep} onNextStep={nextStep}
       onField={setField} onChoice={setChoice}
       onBahanField={setBahanField}
       onSelectIngredient={selectIngredient}
@@ -225,7 +226,7 @@ export default function HomePage() {
   );
 
   if (screen === 'result' && active) return (
-    <ResultScreen entry={active} onBack={goDash} />
+    <ResultScreen entry={active} onBack={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout} />
   );
 
   if (screen === 'ingredients') return (
@@ -241,7 +242,7 @@ export default function HomePage() {
   );
 
   if (screen === 'help') return (
-    <HelpScreen onBack={goDash} />
+    <HelpScreen onBack={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout} />
   );
 
   return (

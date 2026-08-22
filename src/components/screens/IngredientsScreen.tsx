@@ -4,6 +4,7 @@ import { useState } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
 import BottomNav from '@/components/ui/BottomNav';
+import Sidebar from '@/components/ui/Sidebar';
 import { IngredientOption, UserIngredientAvailability } from '@/lib/types';
 import { KARAKTER_DISPLAY, KARAKTER_OPTIONS } from '@/lib/constants';
 import { rp } from '@/lib/helpers';
@@ -173,7 +174,18 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
   const visibleIngredients = ingredients.filter(i => i.statusTersedia || userAvailability.some(a => a.ingredientId === i.id));
 
   return (
-    <AppShell>
+    <AppShell
+      sidebar={
+        <Sidebar
+          active="ingredients"
+          onGoDash={onBack}
+          onGoIngredients={() => {}}
+          onStartForm={onStartForm}
+          onGoHelp={onGoHelp}
+          onLogout={onLogout}
+        />
+      }
+    >
       <StickyHeader
         onBack={onBack}
         title="Kelola Bahan"

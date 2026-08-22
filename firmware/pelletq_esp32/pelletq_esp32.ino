@@ -2,8 +2,8 @@
  * ============================================================================
  * PelletQ-AI — ESP32 Hopper Gate Controller
  * ============================================================================
- * Monitoring suhu (MAX6675) + gerbang hopper (1x servo) antara mixer dan
- * extruder pada mesin pelet berpenggerak motor bensin.
+ * Monitoring suhu (MAX6675) + gerbang hopper (1x servo) + relay pemanas
+ * antara mixer dan extruder pada mesin pelet berpenggerak motor bensin.
  *
  * ESP32 TIDAK mengontrol motor apa pun. Tugasnya hanya:
  *   - Membaca suhu (thermocouple type-K via MAX6675)
@@ -11,6 +11,9 @@
  *     DISPENSING, gerbang buka/tutup berulang (openSeconds/closeSeconds)
  *     tanpa batas waktu sampai dihentikan manual
  *   - Menggerakkan satu servo (gerbang hopper buka/tutup)
+ *   - Menyalakan/mematikan relay pemanas (bang-bang di sekitar thresholdTemp,
+ *     lihat updateHeaterControl) — aktif selama HEATING/DISPENSING, mati
+ *     otomatis kalau thermocouple lepas
  *   - Menampilkan status di TFT ILI9488 480x320
  *   - Komunikasi MQTT (telemetry, command, config, event, LWT)
  *
@@ -92,6 +95,13 @@
 #define PIN_MAX_SO   34    // MAX6675 SO (MISO) — GPIO34 (input-only, ADC1_CH6)
 #define PIN_MAX_CS   26
 #define PIN_SERVO    27
+#define PIN_HEATER   3     // relay pemanas — CATATAN: GPIO3 = UART0 RX (dipakai
+                           // Serial Monitor via USB). Kalau upload/serial jadi
+                           // aneh setelah relay dicolok, pindahkan ke GPIO lain.
+
+// Sebagian besar modul relay 1-channel murah aktif-LOW (LOW = kontak nyala).
+// Ganti ke false kalau modul relaymu aktif-HIGH.
+#define RELAY_ACTIVE_LOW true
 
 // ============================================================================
 // MQTT TOPICS
@@ -117,6 +127,7 @@ struct Config {
   int   servoOpenAngle = 90;      // sudut servo saat buka
   int   servoCloseAngle= 0;       // sudut servo saat tutup
   bool  autoStart      = false;   // otomatis HEATING saat boot?
+  float heaterHysteresis = 2.0f;  // histeresis relay pemanas (C) di sekitar thresholdTemp
 } cfg;
 
 // ============================================================================
@@ -162,6 +173,10 @@ int   sampleCount  = 0;
 // Servo
 Servo hopperServo;
 const char* servoStateStr = "CLOSED";
+
+// Relay pemanas — kontrol bang-bang (histeresis) di sekitar cfg.thresholdTemp,
+// aktif hanya selama ST_HEATING/ST_DISPENSING (lihat updateHeaterControl).
+bool heaterOn = false;
 
 // Konektivitas. esp-mqtt menjalankan koneksi/reconnect-nya pada task IDF;
 // semua publish tetap hanya dilakukan setelah event CONNECTED.
@@ -220,6 +235,8 @@ void handleCommand(const char* action);
 void handleSerialCommand();
 void openHopper();
 void closeHopper();
+void setHeater(bool on);
+void updateHeaterControl();
 void enterState(State s);
 const char* stateName(State s);
 
@@ -237,6 +254,10 @@ void setup() {
   // MAX6675 CS idle HIGH sebelum bus-nya diinisialisasi.
   pinMode(PIN_MAX_CS, OUTPUT);
   digitalWrite(PIN_MAX_CS, HIGH);
+
+  // Relay pemanas mati dulu sebelum apa pun lain diinisialisasi (fail-safe).
+  pinMode(PIN_HEATER, OUTPUT);
+  setHeater(false);
 
   // Inisialisasi TFT (TFT_eSPI meng-init VSPI dengan TFT_MISO = -1).
   tft.init();
@@ -314,6 +335,7 @@ void loop() {
   }
 
   updateStateMachine();                    // tiap loop (pakai millis internal)
+  updateHeaterControl();                   // bang-bang relay pemanas, tiap loop
 
   if (now - lastDisplayMs >= 250) {        // refresh TFT tiap 250 ms
     lastDisplayMs = now;
@@ -490,6 +512,31 @@ void closeHopper() {
 }
 
 // ============================================================================
+// RELAY PEMANAS — kontrol bang-bang (histeresis) di sekitar cfg.thresholdTemp
+// ============================================================================
+void setHeater(bool on) {
+  heaterOn = on;
+  digitalWrite(PIN_HEATER, on ? (RELAY_ACTIVE_LOW ? LOW : HIGH)
+                              : (RELAY_ACTIVE_LOW ? HIGH : LOW));
+  Serial.printf("[heater] %s\n", on ? "ON" : "OFF");
+}
+
+void updateHeaterControl() {
+  // Fail-safe: TC lepas, atau state tidak butuh panas -> pemanas mati.
+  if (tcOpen || (state != ST_HEATING && state != ST_DISPENSING)) {
+    if (heaterOn) setHeater(false);
+    return;
+  }
+
+  // Bang-bang: nyala di bawah (threshold - histeresis), mati di >= threshold.
+  if (heaterOn && tempC >= cfg.thresholdTemp) {
+    setHeater(false);
+  } else if (!heaterOn && tempC < cfg.thresholdTemp - cfg.heaterHysteresis) {
+    setHeater(true);
+  }
+}
+
+// ============================================================================
 // COMMAND — dihormati di state mana pun (override manual)
 // ============================================================================
 void handleCommand(const char* action) {
@@ -541,17 +588,20 @@ void applyConfig(JsonDocument& doc) {
     cfg.servoCloseAngle = clampI(doc["servoCloseAngle"], 0, 180, cfg.servoCloseAngle);
   if (doc["autoStart"].is<bool>())
     cfg.autoStart = doc["autoStart"];
+  if (doc["heaterHysteresis"].is<float>())
+    cfg.heaterHysteresis = clampF(doc["heaterHysteresis"], 0.5f, 20.0f, cfg.heaterHysteresis);
 
   // Ack config aktif (non-retained) untuk konfirmasi di web app.
   JsonDocument ack;
-  ack["thresholdTemp"]   = cfg.thresholdTemp;
-  ack["openSeconds"]     = cfg.openSeconds;
-  ack["closeSeconds"]    = cfg.closeSeconds;
-  ack["warnBelowSec"]    = cfg.warnBelowSec;
-  ack["abortBelowSec"]   = cfg.abortBelowSec;
-  ack["servoOpenAngle"]  = cfg.servoOpenAngle;
-  ack["servoCloseAngle"] = cfg.servoCloseAngle;
-  ack["autoStart"]       = cfg.autoStart;
+  ack["thresholdTemp"]     = cfg.thresholdTemp;
+  ack["openSeconds"]       = cfg.openSeconds;
+  ack["closeSeconds"]      = cfg.closeSeconds;
+  ack["warnBelowSec"]      = cfg.warnBelowSec;
+  ack["abortBelowSec"]     = cfg.abortBelowSec;
+  ack["servoOpenAngle"]    = cfg.servoOpenAngle;
+  ack["servoCloseAngle"]   = cfg.servoCloseAngle;
+  ack["autoStart"]         = cfg.autoStart;
+  ack["heaterHysteresis"]  = cfg.heaterHysteresis;
   char buf[256];
   size_t n = serializeJson(ack, buf, sizeof(buf));
   if (mqttOk && mqttClient != nullptr)
@@ -780,6 +830,7 @@ void publishTelemetry() {
   doc["remainingSec"] = remainingSec;
   doc["belowSec"]     = belowSec;
   doc["servo"]        = servoStateStr;
+  doc["heater"]       = heaterOn;
 
   char buf[192];
   size_t n = serializeJson(doc, buf, sizeof(buf));
@@ -860,6 +911,7 @@ void updateDisplay() {
   static bool   prevOverride        = false;  // deteksi toggle tempOverrideActive
   static int    prevScrollOffset    = -1;
   static int    prevIngredientCount = -1;
+  static int    prevHeater          = -1;
 
   bool full = false;
   if (state != prevState) {           // ganti state -> bersihkan body sekali
@@ -886,6 +938,14 @@ void updateDisplay() {
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.drawString("M", 292, 11);
+  }
+  if ((int)heaterOn != prevHeater) {
+    prevHeater = heaterOn;
+    tft.fillCircle(168, 11, 5, heaterOn ? TFT_ORANGE : TFT_DARKGREY);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextDatum(MR_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("H", 160, 11);
   }
 
   // --- Suhu (kiri) ---

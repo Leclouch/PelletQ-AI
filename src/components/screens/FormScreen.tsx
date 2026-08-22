@@ -3,6 +3,7 @@
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
 import StickyFooter from '@/components/ui/StickyFooter';
+import Sidebar from '@/components/ui/Sidebar';
 import Step1Fish from '@/components/form-steps/Step1Fish';
 import Step3Ingredients from '@/components/form-steps/Step3Ingredients';
 import Step3Summary from '@/components/form-steps/Step3Summary';
@@ -19,6 +20,10 @@ interface FormScreenProps {
   openBahan: number | null;
   openBahanDetails: Record<number, boolean>;
   onGoDash: () => void;
+  onGoIngredients: () => void;
+  onStartForm: () => void;
+  onGoHelp: () => void;
+  onLogout: () => void;
   onPrevStep: () => void;
   onNextStep: () => void;
   onField: (name: keyof FormData, value: string) => void;
@@ -37,12 +42,24 @@ const STEP_TITLES = ['Data Ikan', 'Bahan Baku', 'Ringkasan'];
 export default function FormScreen({
   form, step, ingredients, computing, apiError, diagnosa, penjelasanGagal,
   openBahan, openBahanDetails,
-  onGoDash, onPrevStep, onNextStep, onField, onChoice,
+  onGoDash, onGoIngredients, onStartForm, onGoHelp, onLogout, onPrevStep, onNextStep, onField, onChoice,
   onBahanField, onSelectIngredient,
   onToggleMenu, onToggleDetail, onCloseMenus, onAddBahan, onRemoveBahan,
 }: FormScreenProps) {
   return (
-    <AppShell>
+    <AppShell
+      narrow
+      sidebar={
+        <Sidebar
+          active="none"
+          onGoDash={onGoDash}
+          onGoIngredients={onGoIngredients}
+          onStartForm={onStartForm}
+          onGoHelp={onGoHelp}
+          onLogout={onLogout}
+        />
+      }
+    >
       <StickyHeader
         onBack={onGoDash}
         title="Buat Formulasi"

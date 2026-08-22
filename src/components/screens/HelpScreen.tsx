@@ -1,10 +1,15 @@
 import Image from 'next/image';
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
+import Sidebar from '@/components/ui/Sidebar';
 import logo from '../../../assets/Logo_PelletQ-AI.png';
 
 interface HelpScreenProps {
   onBack: () => void;
+  onGoIngredients: () => void;
+  onStartForm: () => void;
+  onGoHelp: () => void;
+  onLogout: () => void;
 }
 
 const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' };
@@ -17,9 +22,21 @@ const STEPS = [
   'Kirim ke mesin — resep per batch dikirim otomatis ke mesin pelet, atau dijalankan manual dari dashboard.',
 ];
 
-export default function HelpScreen({ onBack }: HelpScreenProps) {
+export default function HelpScreen({ onBack, onGoIngredients, onStartForm, onGoHelp, onLogout }: HelpScreenProps) {
   return (
-    <AppShell>
+    <AppShell
+      narrow
+      sidebar={
+        <Sidebar
+          active="help"
+          onGoDash={onBack}
+          onGoIngredients={onGoIngredients}
+          onStartForm={onStartForm}
+          onGoHelp={onGoHelp}
+          onLogout={onLogout}
+        />
+      }
+    >
       <StickyHeader onBack={onBack} title="Bantuan" subtitle="Tentang PelletQ-AI" />
 
       <div style={{ flex: 1, padding: '18px 18px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>

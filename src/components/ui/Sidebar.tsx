@@ -6,7 +6,7 @@ import LogoutConfirmModal from './LogoutConfirmModal';
 import logo from '../../../assets/Logo_PelletQ-AI.png';
 
 interface SidebarProps {
-  active: 'dashboard' | 'ingredients';
+  active: 'dashboard' | 'ingredients' | 'help' | 'none';
   onGoDash: () => void;
   onGoIngredients: () => void;
   onStartForm: () => void;
@@ -24,7 +24,7 @@ export default function Sidebar({ active, onGoDash, onGoIngredients, onStartForm
   const [confirmingLogout, setConfirmingLogout] = useState(false);
 
   return (
-    <div className="sidebar-nav" style={{ background: '#F3F6FC', borderRight: '1px solid #E5EAF3', padding: '22px 16px', flexDirection: 'column' }}>
+    <div className="sidebar-nav" style={{ background: '#F3F6FC', borderRight: '1px solid #E5EAF3', padding: '22px 16px', flexDirection: 'column', justifyContent: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 6px', marginBottom: 22 }}>
         <div style={{ width: 34, height: 34, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Image src={logo} alt="PelletQ-AI logo" width={34} height={34} unoptimized />
@@ -54,8 +54,8 @@ export default function Sidebar({ active, onGoDash, onGoIngredients, onStartForm
           </svg>
           Kelola Bahan
         </button>
-        <button onClick={onGoHelp} style={navItemStyle(false)}>
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button onClick={onGoHelp} style={navItemStyle(active === 'help')}>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active === 'help' ? 2.3 : 2} strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           Bantuan

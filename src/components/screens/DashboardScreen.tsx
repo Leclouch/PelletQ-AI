@@ -4,6 +4,8 @@ import BottomNav from '@/components/ui/BottomNav';
 import Sidebar from '@/components/ui/Sidebar';
 import { RiwayatEntry } from '@/lib/types';
 import { rp, todayStr } from '@/lib/helpers';
+
+const historyChipStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: '#F6F3EA', color: '#6B7A6F' };
 import logo from '../../../assets/Logo_PelletQ-AI.png';
 
 interface DashboardScreenProps {
@@ -132,11 +134,16 @@ export default function DashboardScreen({
                     <button onClick={onCancelRename} style={{ fontSize: 12, fontWeight: 700, color: '#46554E', background: '#F0EDE5', borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>✕</button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => onOpenDetail(r.id)} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <button onClick={() => onOpenDetail(r.id)} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 13, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.nama}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>{r.tanggal} · {r.targetKg} kg</div>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 7 }}>
+                          <span style={{ fontSize: 14.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{r.nama}</span>
+                          <span style={historyChipStyle}>P {r.result.formulasi.estimasiNutrisi.proteinPct.toFixed(1)}%</span>
+                          <span style={historyChipStyle}>L {r.result.formulasi.estimasiNutrisi.lemakPct.toFixed(1)}%</span>
+                          <span style={historyChipStyle}>{r.result.formulasi.ingredients.length} bahan</span>
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', marginTop: 4 }}>{r.tanggal} · {r.fase} · {r.targetKg} kg</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
                         <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: r.sniOk ? '#E1EBFB' : '#FBF1D9', color: r.sniOk ? '#1D4ED8' : '#9A6A12' }}>{r.sniOk ? 'SNI ✓' : 'Cek SNI'}</span>

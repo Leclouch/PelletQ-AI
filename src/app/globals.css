@@ -62,8 +62,11 @@ select {
 
 .bottom-nav { display: flex; }
 .dashboard-ctas { display: flex; }
+.result-columns { display: flex; flex-direction: column; gap: 16px; }
+.result-stack { display: flex; flex-direction: column; gap: 16px; }
+.result-two-col { display: none; }
 
-/* Desktop sidebar shell — opt-in via AppShell's `sidebar` prop (currently Dashboard only) */
+/* Desktop sidebar shell — opt-in via AppShell's `sidebar` prop */
 .sidebar-nav { display: none; }
 
 @media (min-width: 1024px) {
@@ -92,6 +95,23 @@ select {
     box-shadow: none;
     overflow: visible;
   }
+  .app-shell-outer.has-sidebar .app-shell-inner.content-narrow {
+    max-width: 640px;
+    margin: 0 auto;
+  }
   .has-sidebar .bottom-nav { display: none; }
   .dashboard-ctas { display: none; }
+  .result-stack { display: none; }
+  .result-two-col {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .result-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
 }
