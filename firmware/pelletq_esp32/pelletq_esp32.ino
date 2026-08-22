@@ -7,7 +7,9 @@
  *
  * ESP32 TIDAK mengontrol motor apa pun. Tugasnya hanya:
  *   - Membaca suhu (thermocouple type-K via MAX6675)
- *   - Menjalankan state machine (IDLE/HEATING/MIXING/DISPENSING/ABORTED)
+ *   - Menjalankan state machine (IDLE/HEATING/DISPENSING/ABORTED); saat
+ *     DISPENSING, gerbang buka/tutup berulang (openSeconds/closeSeconds)
+ *     tanpa batas waktu sampai dihentikan manual
  *   - Menggerakkan satu servo (gerbang hopper buka/tutup)
  *   - Menampilkan status di TFT ILI9488 480x320
  *   - Komunikasi MQTT (telemetry, command, config, event, LWT)
@@ -22,16 +24,18 @@
  * (B) Arduino IDE:
  *     TFT_eSPI TIDAK bisa menerima build flag dari Arduino IDE, jadi kamu
  *     HARUS mengonfigurasi User_Setup TFT_eSPI dengan nilai PERSIS berikut.
- *     (JANGAN pakai konfigurasi ILI9488 bawaan yang MOSI/SCK-nya beda.)
+ *     (JANGAN pakai konfigurasi ILI9341 bawaan yang MOSI/SCK-nya beda.)
  *
- *         #define ILI9488_DRIVER
+ *         #define ILI9341_DRIVER
+ *         #define TFT_WIDTH  240
+ *         #define TFT_HEIGHT 320
  *         #define TFT_MOSI 13
  *         #define TFT_SCLK 18
  *         #define TFT_CS   5
  *         #define TFT_DC   2
  *         #define TFT_RST  4
  *         #define TFT_MISO -1        // SDO TFT tidak dicolok
- *         #define SPI_FREQUENCY 27000000   // ILI9488 tidak stabil > 27 MHz
+ *         #define SPI_FREQUENCY 27000000
  *         #define LOAD_GLCD
  *         #define LOAD_FONT2
  *         #define LOAD_FONT4
@@ -105,9 +109,9 @@
 // KONFIGURASI (default hardcoded — dipakai hanya jika belum ada retained config)
 // ============================================================================
 struct Config {
-  float thresholdTemp  = 95.0f;   // suhu ambang masuk MIXING (C)
-  int   waitMinutes    = 7;       // durasi standby MIXING (menit)
-  int   openSeconds    = 30;      // durasi servo buka saat DISPENSING (detik)
+  float thresholdTemp  = 95.0f;   // suhu ambang masuk DISPENSING (C)
+  int   openSeconds    = 10;      // durasi servo buka tiap siklus DISPENSING (detik)
+  int   closeSeconds   = 10;      // durasi servo tutup tiap siklus DISPENSING (detik)
   int   warnBelowSec   = 60;      // suhu turun >= ini -> banner peringatan
   int   abortBelowSec  = 420;     // suhu turun >= ini -> ABORTED (7 menit)
   int   servoOpenAngle = 90;      // sudut servo saat buka
@@ -136,12 +140,12 @@ bool  formulationDirty  = false;  // true = layar IDLE perlu digambar ulang
 // ============================================================================
 // STATE MACHINE
 // ============================================================================
-enum State { ST_IDLE, ST_HEATING, ST_MIXING, ST_DISPENSING, ST_ABORTED };
+enum State { ST_IDLE, ST_HEATING, ST_DISPENSING, ST_ABORTED };
 State state = ST_IDLE;
 
 // Timing (semua non-blocking, basis millis)
-unsigned long mixDeadlineMs   = 0;   // kapan countdown MIXING habis
-unsigned long dispenseEndMs   = 0;   // kapan servo tutup lagi saat DISPENSING
+unsigned long dispensePhaseEndMs = 0;   // kapan siklus buka/tutup saat ini berakhir
+bool          dispenseOpenPhase  = true; // true = servo sedang di fase buka
 unsigned long belowStartMs    = 0;   // awal periode kontinu suhu < threshold (0 = tidak)
 unsigned long belowSec        = 0;   // durasi kontinu di bawah threshold (detik)
 bool warnPublished            = false;
@@ -236,17 +240,17 @@ void setup() {
 
   // Inisialisasi TFT (TFT_eSPI meng-init VSPI dengan TFT_MISO = -1).
   tft.init();
-  tft.setRotation(3);            // landscape 480x320, flipped 180 deg
+  tft.setRotation(3);            // landscape 320x240 — ganti ke 1 bila gambar terbalik/cermin
   tft.fillScreen(TFT_BLACK);
 
   // Bus HSPI khusus MAX6675 — read-only, jadi MOSI tidak dipakai (-1).
   maxSpi.begin(PIN_MAX_SCK, PIN_MAX_SO, -1, -1);
 
   // Header statis (tidak pernah berubah)
-  tft.setFreeFont(&FreeSansBold12pt7b);
+  tft.setFreeFont(&FreeSansBold9pt7b);
   tft.setTextDatum(TL_DATUM);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.drawString("PelletQ-AI", 10, 10);
+  tft.drawString("PelletQ-AI", 4, 3);
 
   // Servo
   ESP32PWM::allocateTimer(0);
@@ -386,16 +390,16 @@ void enterState(State s) {
       // menunggu suhu naik; servo tetap tutup
       closeHopper();
       break;
-    case ST_MIXING:
-      closeHopper();
-      mixDeadlineMs = millis() + (unsigned long)cfg.waitMinutes * 60000UL;
+    case ST_DISPENSING:
+      // siklus buka/tutup berulang dimulai dari fase buka; suhu terus
+      // dipantau selama siklus (lihat updateStateMachine) sampai dihentikan
+      // manual via command "close"/"reset".
+      openHopper();
+      dispenseOpenPhase = true;
+      dispensePhaseEndMs = millis() + (unsigned long)cfg.openSeconds * 1000UL;
       belowStartMs = 0;
       belowSec = 0;
       warnPublished = false;
-      break;
-    case ST_DISPENSING:
-      openHopper();
-      dispenseEndMs = millis() + (unsigned long)cfg.openSeconds * 1000UL;
       publishEvent("DISPENSING_START");
       break;
     case ST_ABORTED:
@@ -420,12 +424,13 @@ void updateStateMachine() {
     case ST_HEATING:
       if (!tcOpen && tempC >= cfg.thresholdTemp) {
         publishEvent("THRESHOLD_REACHED");
-        enterState(ST_MIXING);
+        enterState(ST_DISPENSING);
       }
       break;
 
-    case ST_MIXING: {
-      // Hitung durasi kontinu di bawah threshold (abaikan saat TC lepas).
+    case ST_DISPENSING: {
+      // Hitung durasi kontinu di bawah threshold (abaikan saat TC lepas) —
+      // siklus buka/tutup tetap jalan terus selama suhu belum ABORT.
       if (!tcOpen && tempC < cfg.thresholdTemp) {
         if (belowStartMs == 0) belowStartMs = now;
         belowSec = (now - belowStartMs) / 1000UL;
@@ -444,26 +449,26 @@ void updateStateMachine() {
         warnPublished = true;
       }
 
-      // Countdown TETAP jalan apa pun kondisi suhu (kecuali sudah ABORT).
-      if ((long)(mixDeadlineMs - now) <= 0) {
-        enterState(ST_DISPENSING);
+      // Toggle buka/tutup tiap fase habis — berulang tanpa batas sampai
+      // dihentikan manual (command "close"/"reset").
+      if ((long)(dispensePhaseEndMs - now) <= 0) {
+        if (dispenseOpenPhase) {
+          closeHopper();
+          dispenseOpenPhase = false;
+          dispensePhaseEndMs = now + (unsigned long)cfg.closeSeconds * 1000UL;
+        } else {
+          openHopper();
+          dispenseOpenPhase = true;
+          dispensePhaseEndMs = now + (unsigned long)cfg.openSeconds * 1000UL;
+        }
       }
       break;
     }
 
-    case ST_DISPENSING:
-      if ((long)(dispenseEndMs - now) <= 0) {
-        closeHopper();
-        publishEvent("CYCLE_COMPLETE");
-        advanceBatch();
-        enterState(ST_IDLE);
-      }
-      break;
-
     case ST_ABORTED:
-      // Suhu kembali >= threshold -> MIXING dengan countdown DI-RESET dari awal.
+      // Suhu kembali >= threshold -> lanjutkan siklus DISPENSING dari awal.
       if (!tcOpen && tempC >= cfg.thresholdTemp) {
-        enterState(ST_MIXING);
+        enterState(ST_DISPENSING);
       }
       break;
   }
@@ -496,7 +501,7 @@ void handleCommand(const char* action) {
 
   } else if (strcmp(action, "close") == 0) {
     closeHopper();
-    if (state == ST_DISPENSING) {   // batalkan sisa timer buka
+    if (state == ST_DISPENSING) {   // hentikan siklus buka/tutup manual
       publishEvent("CYCLE_COMPLETE");
       advanceBatch();
       enterState(ST_IDLE);
@@ -522,10 +527,10 @@ void applyConfig(JsonDocument& doc) {
   // Semua field opsional — hanya timpa yang ada & valid.
   if (doc["thresholdTemp"].is<float>())
     cfg.thresholdTemp = clampF(doc["thresholdTemp"], 40.0f, 200.0f, cfg.thresholdTemp);
-  if (doc["waitMinutes"].is<int>())
-    cfg.waitMinutes = clampI(doc["waitMinutes"], 1, 60, cfg.waitMinutes);
   if (doc["openSeconds"].is<int>())
     cfg.openSeconds = clampI(doc["openSeconds"], 1, 300, cfg.openSeconds);
+  if (doc["closeSeconds"].is<int>())
+    cfg.closeSeconds = clampI(doc["closeSeconds"], 1, 300, cfg.closeSeconds);
   if (doc["warnBelowSec"].is<int>())
     cfg.warnBelowSec = clampI(doc["warnBelowSec"], 10, 600, cfg.warnBelowSec);
   if (doc["abortBelowSec"].is<int>())
@@ -540,8 +545,8 @@ void applyConfig(JsonDocument& doc) {
   // Ack config aktif (non-retained) untuk konfirmasi di web app.
   JsonDocument ack;
   ack["thresholdTemp"]   = cfg.thresholdTemp;
-  ack["waitMinutes"]     = cfg.waitMinutes;
   ack["openSeconds"]     = cfg.openSeconds;
+  ack["closeSeconds"]    = cfg.closeSeconds;
   ack["warnBelowSec"]    = cfg.warnBelowSec;
   ack["abortBelowSec"]   = cfg.abortBelowSec;
   ack["servoOpenAngle"]  = cfg.servoOpenAngle;
@@ -763,11 +768,8 @@ void publishTelemetry() {
   if (!mqttOk || mqttClient == nullptr) return;
 
   unsigned long remainingSec = 0;
-  if (state == ST_MIXING) {
-    long r = (long)(mixDeadlineMs - millis());
-    remainingSec = (r > 0) ? (unsigned long)(r / 1000) : 0;
-  } else if (state == ST_DISPENSING) {
-    long r = (long)(dispenseEndMs - millis());
+  if (state == ST_DISPENSING) {
+    long r = (long)(dispensePhaseEndMs - millis());
     remainingSec = (r > 0) ? (unsigned long)(r / 1000) : 0;
   }
 
@@ -799,7 +801,6 @@ const char* stateName(State s) {
   switch (s) {
     case ST_IDLE:       return "IDLE";
     case ST_HEATING:    return "HEATING";
-    case ST_MIXING:     return "MIXING";
     case ST_DISPENSING: return "DISPENSING";
     case ST_ABORTED:    return "ABORTED";
   }
@@ -809,259 +810,246 @@ const char* stateName(State s) {
 // ============================================================================
 // DISPLAY — refresh hanya bagian yang berubah (hindari full clear tiap frame)
 // ============================================================================
-// Region layout (rotation 1, 480x320):
-//   Header    : y   0..40   (statis, digambar di setup + indikator dinamis)
-//   Suhu      : y  50..130
-//   State     : y 138..183
-//   Countdown : y 188..268  (MM:SS + progress bar + sub-note)   [ST_MIXING]
-//   Banner    : y 272..320                                     [ST_ABORTED / suhu-turun warning]
-//   IDLE list : y 185..320  (batch info + hingga 4 baris ingridien +
-//               "+N lainnya", termasuk seluruh area Countdown & Banner di
-//               atas) — dipakai hanya saat ST_IDLE, lihat blok ST_IDLE di
-//               updateDisplay(). Baris ke-4 & marker overflow HARUS berhenti
-//               sebelum y301 (awal footer "Target: ..C") pada x0-105, karena
-//               footer itu digambar ulang tiap ~250ms terlepas dari state.
-//               Sebelum menambah drawString baru di region ini, cek dulu
-//               tabrakan dengan footer target & fillRect(0,300,200,20).
+// Layout 320x240 (rotation 3, panel ILI9341 3.2" — versi lama didesain untuk
+// ILI9488 480x320; layar fisik yang terpasang jauh lebih kecil jadi seluruh
+// layout ditulis ulang, bukan sekadar diskalakan):
+//   Header       : y  0..22   (statis: judul + dot WiFi/MQTT, digambar sekali
+//                  di setup(), dot-nya sendiri dinamis)
+//   Suhu + State : y 24..66   (suhu kiri, nama state kanan — satu baris biar
+//                  hemat tinggi, karena layar ini cuma 240px vs 320px lama)
+//   Info bar     : y 66..84   (Batch X/Y kiri, Target NNC kanan — SELALU
+//                  tampil apa pun state-nya)
+//   Body         : y 88..240  (152px, isi beda-beda per state — lihat blok
+//                  masing-masing di bawah):
+//                    IDLE        -> daftar bahan, autoscroll (geser 1 baris
+//                                   tiap SCROLL_INTERVAL_MS) kalau jumlah
+//                                   bahan > SCROLL_VISIBLE_ROWS, plus titik
+//                                   indikator posisi di baris paling bawah
+//                    HEATING     -> pesan tunggu suhu naik
+//                    DISPENSING  -> siklus buka/tutup berulang tanpa batas
+//                                   (openSeconds/closeSeconds), label fase +
+//                                   countdown ke toggle berikutnya + sub-note
+//                                   peringatan suhu turun (dipantau selama
+//                                   siklus, sama seperti dulu di ST_MIXING)
+//                    ABORTED     -> body dipenuhi merah, pesan 2 baris
 // ----------------------------------------------------------------------------
 static uint16_t stateColor(State s) {
   switch (s) {
     case ST_IDLE:       return TFT_DARKGREY;
     case ST_HEATING:    return TFT_ORANGE;
-    case ST_MIXING:     return TFT_BLUE;
     case ST_DISPENSING: return TFT_GREEN;
     case ST_ABORTED:    return TFT_RED;
   }
   return TFT_WHITE;
 }
 
+// Autoscroll daftar bahan IDLE — hanya aktif kalau ingredientCount melebihi
+// jumlah baris yang muat sekaligus.
+constexpr int SCROLL_VISIBLE_ROWS   = 5;
+constexpr unsigned long SCROLL_INTERVAL_MS = 1800;
+int           scrollOffset  = 0;
+unsigned long lastScrollMs  = 0;
+
 void updateDisplay() {
-  static State  prevState   = (State)255;
-  static String prevTemp    = "";
-  static String prevRemain  = "";
-  static int    prevBanner  = -99;    // 0 none, 1 warn, 2 abort
-  static int    prevWifi    = -1;
-  static int    prevMqtt    = -1;
-  static String prevTarget  = "";
-  static String prevSubNote = "";
-  static bool   prevOverride = false;  // untuk deteksi toggle tempOverrideActive
+  static State  prevState           = (State)255;
+  static String prevTemp            = "";
+  static String prevStateStr        = "";
+  static String prevInfoBar         = "";
+  static int    prevWifi            = -1;
+  static int    prevMqtt            = -1;
+  static bool   prevOverride        = false;  // deteksi toggle tempOverrideActive
+  static int    prevScrollOffset    = -1;
+  static int    prevIngredientCount = -1;
 
   bool full = false;
   if (state != prevState) {           // ganti state -> bersihkan body sekali
-    tft.fillRect(0, 45, 480, 275, TFT_BLACK);
+    tft.fillRect(0, 88, 320, 152, TFT_BLACK);
     prevState = state;
-    prevTemp = ""; prevRemain = ""; prevBanner = -99; prevSubNote = "";
+    scrollOffset = 0;
+    lastScrollMs = millis();
     full = true;
   }
 
   // --- Header: indikator WiFi & MQTT (dot kecil) ---
   if ((int)wifiOk != prevWifi) {
     prevWifi = wifiOk;
-    tft.fillCircle(410, 22, 7, wifiOk ? TFT_GREEN : TFT_RED);
+    tft.fillCircle(240, 11, 5, wifiOk ? TFT_GREEN : TFT_RED);
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("W", 398, 22);
+    tft.drawString("W", 232, 11);
   }
   if ((int)mqttOk != prevMqtt) {
     prevMqtt = mqttOk;
-    tft.fillCircle(460, 22, 7, mqttOk ? TFT_GREEN : TFT_RED);
+    tft.fillCircle(300, 11, 5, mqttOk ? TFT_GREEN : TFT_RED);
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("M", 448, 22);
+    tft.drawString("M", 292, 11);
   }
 
-  // --- Suhu besar ---
-  String tempStr = tcOpen ? "TC OPEN" : String(tempC, 1);
+  // --- Suhu (kiri) ---
+  String tempStr = tcOpen ? "TC OPEN" : (String(tempC, 1) + "C");
   if (tempStr != prevTemp || full || tempOverrideActive != prevOverride) {
     prevTemp = tempStr;
     prevOverride = tempOverrideActive;
-    tft.fillRect(0, 50, 480, 80, TFT_BLACK);
+    tft.fillRect(0, 24, 200, 42, TFT_BLACK);
     uint16_t col = TFT_WHITE;
-    if (tcOpen)                                        col = TFT_RED;
-    else if (state == ST_MIXING && tempC < cfg.thresholdTemp) col = TFT_ORANGE;
-
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(col, TFT_BLACK);
-    if (tcOpen) {
-      tft.setFreeFont(&FreeSansBold18pt7b);
-      tft.drawString("TC OPEN", 240, 90);
-    } else {
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.drawString(tempStr, 210, 90);
-      // unit "°C" — degree digambar manual (font GFX tidak punya glyph derajat)
-      tft.drawCircle(322, 74, 5, col);
-      tft.setFreeFont(&FreeSansBold18pt7b);
-      tft.setTextDatum(ML_DATUM);
-      tft.drawString("C", 332, 92);
-    }
-
-    // Indikator override manual (bench-test "temp <v>") — label terpisah di
-    // pojok kanan area suhu, area ini kosong (angka+lingkaran+"C" hanya
-    // menempati bagian tengah), jadi tidak ada risiko overflow/overlap.
-    if (tempOverrideActive) {
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MR_DATUM);
-      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-      tft.drawString("OVERRIDE", 475, 60);
-    }
-  }
-
-  // --- State ---
-  if (full) {
-    tft.fillRect(0, 138, 480, 45, TFT_BLACK);
+    if (tcOpen)                                                 col = TFT_RED;
+    else if (tempOverrideActive)                                col = TFT_YELLOW;
+    else if (state == ST_DISPENSING && tempC < cfg.thresholdTemp) col = TFT_ORANGE;
     tft.setFreeFont(&FreeSansBold18pt7b);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(stateColor(state), TFT_BLACK);
-    tft.drawString(stateName(state), 240, 160);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(col, TFT_BLACK);
+    tft.drawString(tempStr, 4, 44);
   }
 
-  // --- Countdown / progress / sub-note ---
-  if (state == ST_MIXING) {
-    long r = (long)(mixDeadlineMs - millis());
-    unsigned long rem = (r > 0) ? (unsigned long)(r / 1000) : 0;
-    char mmss[8];
-    snprintf(mmss, sizeof(mmss), "%02lu:%02lu", rem / 60, rem % 60);
-    String remStr = mmss;
-    if (remStr != prevRemain) {
-      prevRemain = remStr;
-      tft.fillRect(120, 188, 240, 40, TFT_BLACK);
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.drawString(remStr, 240, 208);
+  // --- State (kanan, satu baris dengan suhu) ---
+  String stateStr = stateName(state);
+  if (stateStr != prevStateStr || full) {
+    prevStateStr = stateStr;
+    tft.fillRect(200, 24, 120, 42, TFT_BLACK);
+    tft.setFreeFont(&FreeSansBold12pt7b);
+    tft.setTextDatum(MR_DATUM);
+    tft.setTextColor(stateColor(state), TFT_BLACK);
+    tft.drawString(stateStr, 314, 44);
+  }
 
-      // progress bar
-      long total = (long)cfg.waitMinutes * 60;
-      long elapsed = total - (long)rem;
-      if (elapsed < 0) elapsed = 0;
-      int w = (int)(360.0 * elapsed / total);
-      tft.drawRect(60, 238, 360, 18, TFT_WHITE);
-      tft.fillRect(61, 239, 358, 16, TFT_BLACK);
-      tft.fillRect(61, 239, (w > 358 ? 358 : w), 16, TFT_BLUE);
+  // --- Info bar: Batch X/Y (kiri) + Target NNC (kanan), selalu tampil ---
+  String infoBar = "";
+  if (ingredientCount > 0) {
+    char b[16];
+    snprintf(b, sizeof(b), "Batch %d/%d", currentBatch, totalBatches);
+    infoBar = String(b);
+  }
+  char t[20];
+  snprintf(t, sizeof(t), "Target: %.0fC", cfg.thresholdTemp);
+  String infoBarKey = infoBar + "|" + t;
+  if (infoBarKey != prevInfoBar || full) {
+    prevInfoBar = infoBarKey;
+    tft.fillRect(0, 66, 320, 18, TFT_BLACK);
+    tft.setFreeFont(&FreeSans9pt7b);
+    if (infoBar.length()) {
+      tft.setTextDatum(TL_DATUM);
+      tft.setTextColor(TFT_CYAN, TFT_BLACK);
+      tft.drawString(infoBar, 4, 66);
     }
-    // sub-note "suhu turun" (belowSec kecil, belum warn)
+    tft.setTextDatum(TR_DATUM);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.drawString(t, 316, 66);
+  }
+
+  // --- Body: konten spesifik per state ---
+  if (state == ST_DISPENSING) {
+    static String prevRemain  = "";
+    static String prevPhase   = "";
+    static String prevSubNote = "";
+    long r = (long)(dispensePhaseEndMs - millis());
+    unsigned long rem = (r > 0) ? (unsigned long)(r / 1000) : 0;
+    String remStr = String(rem) + "s";
+    String phaseStr = dispenseOpenPhase ? "HOPPER TERBUKA" : "HOPPER TERTUTUP";
+    if (remStr != prevRemain || phaseStr != prevPhase || full) {
+      prevRemain = remStr;
+      prevPhase = phaseStr;
+      tft.fillRect(0, 88, 320, 60, TFT_BLACK);
+      tft.setFreeFont(&FreeSansBold12pt7b);
+      tft.setTextDatum(MC_DATUM);
+      tft.setTextColor(dispenseOpenPhase ? TFT_GREEN : TFT_BLUE, TFT_BLACK);
+      tft.drawString(phaseStr, 160, 100);
+      tft.setFreeFont(&FreeSansBold24pt7b);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.drawString(remStr, 160, 134);
+    }
+    // sub-note: peringatan suhu turun — siklus buka/tutup tetap jalan terus
+    // selama ST_DISPENSING, jadi pemantauan ini menggantikan yang dulu ada
+    // di ST_MIXING.
     String note = "";
-    if (belowSec > 0 && belowSec < (unsigned long)cfg.warnBelowSec) note = "suhu turun";
-    if (note != prevSubNote) {
+    uint16_t noteCol = TFT_ORANGE;
+    if (belowSec >= (unsigned long)cfg.warnBelowSec) {
+      note = "SUHU TURUN - PERIKSA MESIN";
+      noteCol = TFT_YELLOW;
+    } else if (belowSec > 0) {
+      note = "suhu turun";
+    }
+    if (note != prevSubNote || full) {
       prevSubNote = note;
-      tft.fillRect(0, 258, 480, 12, TFT_BLACK);
+      tft.fillRect(0, 172, 320, 16, TFT_BLACK);
       if (note.length()) {
         tft.setFreeFont(&FreeSans9pt7b);
         tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft.drawString(note, 240, 264);
+        tft.setTextColor(noteCol, TFT_BLACK);
+        tft.drawString(note, 160, 180);
       }
     }
-  } else if (state == ST_DISPENSING) {
-    long r = (long)(dispenseEndMs - millis());
-    unsigned long rem = (r > 0) ? (unsigned long)(r / 1000) : 0;
-    String remStr = String(rem) + "s";
-    if (remStr != prevRemain) {
-      prevRemain = remStr;
-      tft.fillRect(0, 188, 480, 70, TFT_BLACK);
+  } else if (state == ST_HEATING) {
+    if (full) {
+      tft.fillRect(0, 88, 320, 90, TFT_BLACK);
       tft.setFreeFont(&FreeSansBold12pt7b);
       tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_GREEN, TFT_BLACK);
-      tft.drawString("HOPPER TERBUKA", 240, 202);
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.drawString(remStr, 240, 238);
+      tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+      tft.drawString("MENUNGGU SUHU NAIK...", 160, 130);
     }
-  } else if (state == ST_IDLE && (full || formulationDirty)) {
-    formulationDirty = false;
-    // Tinggi 135 (bukan 125) supaya y185-320 tercakup penuh, termasuk area
-    // banner (y272-320) di bawahnya — lihat catatan di blok banner: ini
-    // mencegah fillRect banner menimpa baris ingridien yang baru digambar.
-    tft.fillRect(0, 185, 480, 135, TFT_BLACK);
-
-    if (ingredientCount > 0) {
-      char batchStr[24];
-      snprintf(batchStr, sizeof(batchStr), "Batch %d/%d", currentBatch, totalBatches);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(TC_DATUM);
-      tft.setTextColor(TFT_CYAN, TFT_BLACK);
-      tft.drawString(batchStr, 240, 188);
-
-      bool  isLastPartial = (currentBatch == totalBatches) && (lastBatchKg > 0) && (batchSizeKg > 0);
-      float scale = isLastPartial ? (lastBatchKg / batchSizeKg) : 1.0f;
-
-      tft.setFreeFont(&FreeSans9pt7b);
-      tft.setTextDatum(TL_DATUM);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      int rowY = 220;
-      // maxRows=4: baris terakhir jatuh di y274 (glyph ~y274-291), berhenti
-      // sebelum footer target (y301+) di x0-105 — lihat catatan region layout
-      // di atas. JANGAN naikkan lagi tanpa menghitung ulang batas footer.
-      int maxRows = 4;
-      int shown = (ingredientCount < maxRows) ? ingredientCount : maxRows;
-      for (int i = 0; i < shown; i++) {
-        char row[40];
-        snprintf(row, sizeof(row), "%-18s %5.2f kg",
-                 formulationIngredients[i].name, formulationIngredients[i].kg * scale);
-        tft.drawString(row, 20, rowY);
-        rowY += 18;
-      }
-      if (ingredientCount > shown) {
-        char more[24];
-        snprintf(more, sizeof(more), "+%d lainnya", ingredientCount - shown);
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-        // Digambar di x300 (bukan x20) supaya di luar jangkauan x footer
-        // target (x0-105) / fillRect clear-nya (x0-200) meski y-nya (292)
-        // sama dengan baris ke-5 yang lama.
-        tft.drawString(more, 300, rowY);
-      }
-    }
-  }
-
-  // --- Target aktif (pojok kiri bawah, di atas banner) ---
-  String targetStr = "Target: " + String(cfg.thresholdTemp, 0) + "C";
-  if (targetStr != prevTarget) {
-    prevTarget = targetStr;
-    tft.fillRect(0, 300, 200, 20, TFT_BLACK);  // hanya sisi kiri, jangan tabrak banner tengah
-  }
-
-  // --- Banner peringatan (paling bawah) ---
-  int banner = 0;
-  if (state == ST_ABORTED) banner = 2;
-  else if (state == ST_MIXING && belowSec >= (unsigned long)cfg.warnBelowSec) banner = 1;
-
-  if (banner != prevBanner) {
-    prevBanner = banner;
-    if (banner == 2) {
-      tft.fillRect(0, 272, 480, 48, TFT_RED);
+  } else if (state == ST_ABORTED) {
+    if (full) {
+      tft.fillRect(0, 88, 320, 152, TFT_RED);
       tft.setFreeFont(&FreeSansBold12pt7b);
       tft.setTextDatum(MC_DATUM);
       tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawString("DIHENTIKAN: SUHU TURUN > 7 MENIT", 240, 296);
-    } else if (banner == 1) {
-      tft.fillRect(0, 272, 480, 48, TFT_YELLOW);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_BLACK, TFT_YELLOW);
-      tft.drawString("SUHU TURUN > 1 MENIT - PERIKSA MESIN", 240, 296);
-    } else if (state == ST_IDLE) {
-      // Saat IDLE, blok ST_IDLE di atas (baris ~838) SUDAH membersihkan
-      // y185-320 sekaligus (termasuk seluruh area banner y272-320) sebelum
-      // menggambar batch info + baris ingridien di panggilan yang sama —
-      // JANGAN fillRect lagi di sini, atau baris ke-4 (y274) dan marker
-      // "+N lainnya" (y292, x300) akan tertimpa hitam persis setelah digambar.
-      prevTarget = "";
-    } else {
-      tft.fillRect(0, 272, 480, 48, TFT_BLACK);
-      // gambar ulang target kecil karena banner bersih menimpa area bawah
-      prevTarget = "";
+      tft.drawString("DIHENTIKAN:", 160, 150);
+      tft.drawString("SUHU TURUN > 7 MENIT", 160, 174);
     }
-  }
+  } else if (state == ST_IDLE) {
+    unsigned long now = millis();
+    bool needsScroll = ingredientCount > SCROLL_VISIBLE_ROWS;
 
-  // Target kecil digambar setelah banner supaya tidak tertimpa (hanya saat normal)
-  if (banner == 0) {
-    tft.setFreeFont(&FreeSans9pt7b);
-    tft.setTextDatum(BL_DATUM);
-    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    tft.drawString(targetStr, 10, 318);
-    prevTarget = targetStr;
+    if (needsScroll && (now - lastScrollMs >= SCROLL_INTERVAL_MS)) {
+      lastScrollMs = now;
+      scrollOffset = (scrollOffset + 1) % ingredientCount;
+    }
+    if (!needsScroll) scrollOffset = 0;
+
+    bool ingredientsChanged = formulationDirty || ingredientCount != prevIngredientCount;
+    if (full || ingredientsChanged || scrollOffset != prevScrollOffset) {
+      prevIngredientCount = ingredientCount;
+      prevScrollOffset = scrollOffset;
+      formulationDirty = false;
+      tft.fillRect(0, 88, 320, 152, TFT_BLACK);
+
+      if (ingredientCount == 0) {
+        tft.setFreeFont(&FreeSans9pt7b);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.drawString("(belum ada formulasi)", 160, 160);
+      } else {
+        bool  isLastPartial = (currentBatch == totalBatches) && (lastBatchKg > 0) && (batchSizeKg > 0);
+        float scale = isLastPartial ? (lastBatchKg / batchSizeKg) : 1.0f;
+
+        tft.setFreeFont(&FreeSans9pt7b);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        int rowY = 92;
+        int shown = (ingredientCount < SCROLL_VISIBLE_ROWS) ? ingredientCount : SCROLL_VISIBLE_ROWS;
+        for (int i = 0; i < shown; i++) {
+          int idx = (scrollOffset + i) % ingredientCount;   // jendela geser
+          char row[40];
+          snprintf(row, sizeof(row), "%-16s %5.2f kg",
+                   formulationIngredients[idx].name, formulationIngredients[idx].kg * scale);
+          tft.drawString(row, 6, rowY);
+          rowY += 24;
+        }
+
+        // Titik indikator posisi scroll — cuma digambar kalau memang scrolling.
+        if (needsScroll) {
+          int dotsY = 226;
+          int spacing = (ingredientCount > 1) ? (280 / (ingredientCount - 1)) : 0;
+          for (int i = 0; i < ingredientCount; i++) {
+            int dx = 20 + i * spacing;
+            bool active = (i == scrollOffset);
+            tft.fillCircle(dx, dotsY, active ? 3 : 2, active ? TFT_CYAN : TFT_DARKGREY);
+          }
+        }
+      }
+    }
   }
 }
 

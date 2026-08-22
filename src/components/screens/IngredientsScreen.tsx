@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import StickyHeader from '@/components/ui/StickyHeader';
+import BottomNav from '@/components/ui/BottomNav';
 import { IngredientOption, UserIngredientAvailability } from '@/lib/types';
 import { KARAKTER_DISPLAY, KARAKTER_OPTIONS } from '@/lib/constants';
 import { rp } from '@/lib/helpers';
@@ -12,6 +13,9 @@ interface IngredientsScreenProps {
   userAvailability: UserIngredientAvailability[];
   onBack: () => void;
   onSaved: () => void;
+  onStartForm: () => void;
+  onGoHelp: () => void;
+  onLogout: () => void;
 }
 
 interface CatalogForm {
@@ -60,7 +64,7 @@ function CatalogFields({ form, onChange }: { form: CatalogForm; onChange: (k: ke
         <label style={labelStyle}>Karakter Bahan</label>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           {KARAKTER_OPTIONS.map(v => (
-            <button key={v} onClick={() => onChange('karakterBahan', v)} style={{ padding: '6px 10px', borderRadius: 8, fontSize: 11, fontWeight: form.karakterBahan === v ? 800 : 600, background: form.karakterBahan === v ? '#E4F1E9' : '#F6F3EA', color: form.karakterBahan === v ? '#15724B' : '#6B7A6F', border: `1px solid ${form.karakterBahan === v ? '#1A8A5E' : '#E7E1D2'}`, cursor: 'pointer' }}>
+            <button key={v} onClick={() => onChange('karakterBahan', v)} style={{ padding: '6px 10px', borderRadius: 8, fontSize: 11, fontWeight: form.karakterBahan === v ? 800 : 600, background: form.karakterBahan === v ? '#E1EBFB' : '#F6F3EA', color: form.karakterBahan === v ? '#1D4ED8' : '#6B7A6F', border: `1px solid ${form.karakterBahan === v ? '#2563EB' : '#E7E1D2'}`, cursor: 'pointer' }}>
               {KARAKTER_DISPLAY[v]}
             </button>
           ))}
@@ -70,7 +74,7 @@ function CatalogFields({ form, onChange }: { form: CatalogForm; onChange: (k: ke
   );
 }
 
-export default function IngredientsScreen({ ingredients, userAvailability, onBack, onSaved }: IngredientsScreenProps) {
+export default function IngredientsScreen({ ingredients, userAvailability, onBack, onSaved, onStartForm, onGoHelp, onLogout }: IngredientsScreenProps) {
   const [expandedCatalog, setExpandedCatalog] = useState<string | null>(null);
   const [expandedAvail, setExpandedAvail] = useState<string | null>(null);
   const [catalogForms, setCatalogForms] = useState<Record<string, CatalogForm>>({});
@@ -170,9 +174,18 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
 
   return (
     <AppShell>
-      <StickyHeader onBack={onBack} title="Kelola Bahan" subtitle={`${visibleIngredients.length} bahan baku`} />
+      <StickyHeader
+        onBack={onBack}
+        title="Kelola Bahan"
+        subtitle={`${visibleIngredients.length} bahan baku`}
+        right={
+          <button onClick={() => { setAddingNew(true); scrollTo(0, 0); document.querySelector('.app-shell-inner')?.scrollTo({ top: 0 }); }} title="Tambah Bahan Baru" style={{ width: 38, height: 38, borderRadius: 12, background: 'linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none' }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+        }
+      />
 
-      <div style={{ flex: 1, padding: '18px 18px 100px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ flex: 1, padding: '18px 18px 132px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {error && (
           <div style={{ background: '#FBE7E1', border: '1px solid #E2A593', borderRadius: 12, padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#8F3520', lineHeight: 1.4 }}>
             {error}
@@ -182,12 +195,12 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
 
         {/* Add new form */}
         {addingNew && (
-          <div style={{ background: '#E4F1E9', border: '1.5px solid #1A8A5E', borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#15724B' }}>Tambah Bahan Baru</div>
+          <div style={{ background: '#E1EBFB', border: '1.5px solid #2563EB', borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#1D4ED8' }}>Tambah Bahan Baru</div>
             <CatalogFields form={newForm} onChange={(k, v) => setNewForm(f => ({ ...f, [k]: v }))} />
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button onClick={() => { setAddingNew(false); setNewForm(EMPTY_CAT); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: '#fff', border: '1.5px solid #E2DDCE', color: '#46554E', fontWeight: 700, cursor: 'pointer' }}>Batal</button>
-              <button onClick={addIngredient} disabled={saving === 'new' || !newForm.name.trim()} style={{ flex: 2, padding: 12, borderRadius: 12, background: '#1A8A5E', color: '#fff', fontWeight: 800, cursor: 'pointer', opacity: !newForm.name.trim() ? 0.6 : 1 }}>
+              <button onClick={addIngredient} disabled={saving === 'new' || !newForm.name.trim()} style={{ flex: 2, padding: 12, borderRadius: 12, background: '#2563EB', color: '#fff', fontWeight: 800, cursor: 'pointer', opacity: !newForm.name.trim() ? 0.6 : 1 }}>
                 {saving === 'new' ? 'Menyimpan…' : 'Simpan Bahan'}
               </button>
             </div>
@@ -215,8 +228,8 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#B3BCB4', marginTop: 2 }}>Harga standar: {rp(ing.hargaStandarPerKg)}/kg</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button onClick={() => startEditCatalog(ing)} style={{ width: 32, height: 32, borderRadius: 9, background: catOpen ? '#E4F1E9' : '#F6F3EA', border: `1px solid ${catOpen ? '#1A8A5E' : '#E7E1D2'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={catOpen ? '#15724B' : '#7C8A80'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    <button onClick={() => startEditCatalog(ing)} style={{ width: 32, height: 32, borderRadius: 9, background: catOpen ? '#E1EBFB' : '#F6F3EA', border: `1px solid ${catOpen ? '#2563EB' : '#E7E1D2'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={catOpen ? '#1D4ED8' : '#7C8A80'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                     </button>
                     {deleteConfirm === ing.id ? (
                       <div style={{ display: 'flex', gap: 4 }}>
@@ -236,7 +249,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     <CatalogFields form={catForm} onChange={(k, v) => setCatalogForms(f => ({ ...f, [ing.id]: { ...f[ing.id], [k]: v } }))} />
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setExpandedCatalog(null)} style={{ flex: 1, padding: 10, borderRadius: 10, background: '#F0EDE5', color: '#46554E', fontWeight: 700, cursor: 'pointer' }}>Batal</button>
-                      <button onClick={() => saveCatalog(ing.id)} disabled={saving === ing.id + '-cat'} style={{ flex: 2, padding: 10, borderRadius: 10, background: '#1A8A5E', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
+                      <button onClick={() => saveCatalog(ing.id)} disabled={saving === ing.id + '-cat'} style={{ flex: 2, padding: 10, borderRadius: 10, background: '#2563EB', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
                         {saving === ing.id + '-cat' ? 'Menyimpan…' : 'Simpan'}
                       </button>
                     </div>
@@ -263,7 +276,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     {avail && (
                       <button onClick={() => deleteAvail(avail.id)} disabled={saving === avail.id + '-del-avail'} style={{ fontSize: 11, fontWeight: 700, padding: '5px 9px', borderRadius: 8, background: '#FBEDE7', color: '#C06A4E', cursor: 'pointer' }}>Hapus</button>
                     )}
-                    <button onClick={() => startEditAvail(ing)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 11px', borderRadius: 9, background: availOpen ? '#E4F1E9' : '#F6F3EA', border: `1px solid ${availOpen ? '#1A8A5E' : '#E7E1D2'}`, color: availOpen ? '#15724B' : '#46554E', cursor: 'pointer' }}>
+                    <button onClick={() => startEditAvail(ing)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 11px', borderRadius: 9, background: availOpen ? '#E1EBFB' : '#F6F3EA', border: `1px solid ${availOpen ? '#2563EB' : '#E7E1D2'}`, color: availOpen ? '#1D4ED8' : '#46554E', cursor: 'pointer' }}>
                       {avail ? 'Edit' : 'Atur'} {availOpen ? '▲' : '▼'}
                     </button>
                   </div>
@@ -284,7 +297,7 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setExpandedAvail(null)} style={{ flex: 1, padding: 10, borderRadius: 10, background: '#F0EDE5', color: '#46554E', fontWeight: 700, cursor: 'pointer' }}>Batal</button>
-                      <button onClick={() => saveAvail(ing.id)} disabled={saving === ing.id + '-avail'} style={{ flex: 2, padding: 10, borderRadius: 10, background: '#1A8A5E', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
+                      <button onClick={() => saveAvail(ing.id)} disabled={saving === ing.id + '-avail'} style={{ flex: 2, padding: 10, borderRadius: 10, background: '#2563EB', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
                         {saving === ing.id + '-avail' ? 'Menyimpan…' : 'Simpan Ketersediaan'}
                       </button>
                     </div>
@@ -296,10 +309,14 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
         })}
       </div>
 
-      {/* FAB */}
-      <button onClick={() => { setAddingNew(true); scrollTo(0, 0); }} style={{ position: 'fixed', bottom: 24, right: 24, width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#1A8A5E 0%,#11623F 100%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(17,98,63,.3)', cursor: 'pointer', zIndex: 10, border: 'none' }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-      </button>
+      <BottomNav
+        active="ingredients"
+        onGoDash={onBack}
+        onGoIngredients={() => {}}
+        onStartForm={onStartForm}
+        onGoHelp={onGoHelp}
+        onLogout={onLogout}
+      />
     </AppShell>
   );
 }

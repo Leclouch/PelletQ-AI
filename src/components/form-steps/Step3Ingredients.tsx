@@ -32,7 +32,7 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
         return (
           <div key={i} style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 16, padding: 13, boxShadow: '0 1px 2px rgba(28,46,39,.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 8, background: '#E4F1E9', color: '#15724B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{i + 1}</span>
+              <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 8, background: '#E1EBFB', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{i + 1}</span>
               <IngredientDropdown
                 ingredients={ingredients}
                 selectedId={b.ingredientId}
@@ -72,7 +72,7 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
         );
       })}
 
-      <button onClick={onAddBahan} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: 14, borderRadius: 14, background: '#fff', border: `1.5px dashed ${canAdd ? '#1A8A5E' : '#D8D2C2'}`, color: canAdd ? '#1A8A5E' : '#B6AF9E', fontSize: 14, fontWeight: 800, cursor: canAdd ? 'pointer' : 'not-allowed' }}>
+      <button onClick={onAddBahan} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: 14, borderRadius: 14, background: '#fff', border: `1.5px dashed ${canAdd ? '#2563EB' : '#D8D2C2'}`, color: canAdd ? '#2563EB' : '#B6AF9E', fontSize: 14, fontWeight: 800, cursor: canAdd ? 'pointer' : 'not-allowed' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
         Tambah Bahan
       </button>

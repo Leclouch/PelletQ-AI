@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { signOut } from 'next-auth/react';
 import DashboardScreen from '@/components/screens/DashboardScreen';
 import FormScreen from '@/components/screens/FormScreen';
 import ResultScreen from '@/components/screens/ResultScreen';
 import IngredientsScreen from '@/components/screens/IngredientsScreen';
+import HelpScreen from '@/components/screens/HelpScreen';
 import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult, Diagnosa } from '@/lib/types';
 import { DEFAULT_FORM, PHASE_MAP } from '@/lib/constants';
 import { todayStr, getDefaultBahan } from '@/lib/helpers';
@@ -68,6 +70,8 @@ export default function HomePage() {
 
   const goDash = () => { setScreen('dashboard'); setApiError(null); setDiagnosa(null); setPenjelasanGagal(null); };
   const goIngredients = () => setScreen('ingredients');
+  const goHelp = () => setScreen('help');
+  const logout = () => signOut({ callbackUrl: '/login' });
 
   const startForm = () => {
     setForm({ ...DEFAULT_FORM, bahan: getDefaultBahan(userAvailability, ingredients) });
@@ -191,6 +195,8 @@ export default function HomePage() {
       deletingId={deletingId}
       onStart={startForm}
       onGoIngredients={goIngredients}
+      onGoHelp={goHelp}
+      onLogout={logout}
       onOpenDetail={openDetail}
       onStartRename={startRename}
       onRenameInput={setRenameValue}
@@ -228,12 +234,19 @@ export default function HomePage() {
       userAvailability={userAvailability}
       onBack={goDash}
       onSaved={refreshAll}
+      onStartForm={startForm}
+      onGoHelp={goHelp}
+      onLogout={logout}
     />
+  );
+
+  if (screen === 'help') return (
+    <HelpScreen onBack={goDash} />
   );
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <button onClick={goDash} style={{ color: '#1A8A5E', fontWeight: 800, cursor: 'pointer', fontSize: 14 }}>← Beranda</button>
+      <button onClick={goDash} style={{ color: '#2563EB', fontWeight: 800, cursor: 'pointer', fontSize: 14 }}>← Beranda</button>
     </div>
   );
 }

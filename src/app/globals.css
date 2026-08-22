@@ -4,13 +4,13 @@
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font-plus-jakarta), system-ui, sans-serif;
-  background: #E7E1D3;
+  background: #FFFFFF;
   -webkit-font-smoothing: antialiased;
   color: #1C2E27;
 }
 button { font-family: inherit; border: none; background: none; }
 input, select { font-family: inherit; }
-input:focus, select:focus { outline: none; border-color: #1A8A5E !important; }
+input:focus, select:focus { outline: none; border-color: #2563EB !important; }
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -20,7 +20,78 @@ select {
   padding-right: 38px !important;
 }
 ::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeUp { from { transform: translateY(9px); } to { transform: none; } }
 @keyframes pop { from { transform: scale(.975); } to { transform: none; } }
+
+/* App shell — mobile-first "device" column, becomes a framed card on wider screens */
+.app-shell-outer {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #FFFFFF;
+}
+.app-shell-inner {
+  width: 100%;
+  max-width: 440px;
+  min-height: 100vh;
+  background: #FFFFFF;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 760px) {
+  .app-shell-outer {
+    align-items: center;
+    padding: 48px 24px;
+    background: radial-gradient(130% 100% at 50% 0%, #F3FBF7 0%, #F2F3F1 45%, #EFF1F6 100%);
+  }
+  .app-shell-inner {
+    max-width: 460px;
+    height: min(calc(100vh - 96px), 900px);
+    min-height: 0;
+    border-radius: 28px;
+    overflow-y: auto;
+    box-shadow: 0 30px 70px -24px rgba(15,50,38,.28), 0 0 0 1px rgba(15,50,38,.06);
+  }
+}
+
+.bottom-nav { display: flex; }
+.dashboard-ctas { display: flex; }
+
+/* Desktop sidebar shell — opt-in via AppShell's `sidebar` prop (currently Dashboard only) */
+.sidebar-nav { display: none; }
+
+@media (min-width: 1024px) {
+  .app-shell-outer.has-sidebar {
+    justify-content: flex-start;
+    align-items: stretch;
+    padding: 0;
+    background: #F7F8F7;
+  }
+  .sidebar-nav {
+    display: flex;
+    width: 252px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .app-shell-outer.has-sidebar .app-shell-inner {
+    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    height: auto;
+    min-height: 100vh;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .has-sidebar .bottom-nav { display: none; }
+  .dashboard-ctas { display: none; }
+}

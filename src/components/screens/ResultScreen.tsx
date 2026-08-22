@@ -64,11 +64,11 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
 
       <div style={{ flex: 1, padding: '18px 18px 120px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* SNI badge */}
-        <div style={{ borderRadius: 20, padding: 18, display: 'flex', alignItems: 'center', gap: 15, background: sniOk ? '#E4F1E9' : '#FBF1D9', border: `1.5px solid ${sniOk ? '#A7D4BC' : '#EAC97F'}` }}>
+        <div style={{ borderRadius: 20, padding: 18, display: 'flex', alignItems: 'center', gap: 15, background: sniOk ? '#E1EBFB' : '#FBF1D9', border: `1.5px solid ${sniOk ? '#B9CDF3' : '#EAC97F'}` }}>
           <span style={{ fontSize: 32, flexShrink: 0 }}>{sniOk ? '✅' : '⚠️'}</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: sniOk ? '#3E8C68' : '#A6802F' }}>Status Mutu</div>
-            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.02em', color: sniOk ? '#11623F' : '#825511', lineHeight: 1.1, marginTop: 2 }}>{sniOk ? 'Sesuai SNI' : 'Belum Sesuai SNI'}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: sniOk ? '#3568C7' : '#A6802F' }}>Status Mutu</div>
+            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.02em', color: sniOk ? '#1D4ED8' : '#825511', lineHeight: 1.1, marginTop: 2 }}>{sniOk ? 'Sesuai SNI' : 'Belum Sesuai SNI'}</div>
           </div>
         </div>
 
@@ -86,7 +86,7 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
         {/* Komposisi */}
         <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <span style={{ width: 7, height: 18, borderRadius: 4, background: '#1A8A5E' }} />
+            <span style={{ width: 7, height: 18, borderRadius: 4, background: '#2563EB' }} />
             <div style={{ fontSize: 16, fontWeight: 800 }}>Komposisi Bahan</div>
           </div>
           {res.formulasi.ingredients.map((it, i) => (
@@ -96,7 +96,7 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>{it.jumlahKg.toFixed(2)} kg · {rp(it.hargaPerKg)}/kg</div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#11623F' }}>{it.persentase.toFixed(1)}%</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#1D4ED8' }}>{it.persentase.toFixed(1)}%</div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: '#46554E', marginTop: 2 }}>{rp(it.jumlahKg * it.hargaPerKg)}</div>
               </div>
             </div>
@@ -109,19 +109,19 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
 
         {/* Resep per Batch */}
         {res.resepPerBatch && res.batchInfo && (
-          <div style={{ background: '#fff', border: '1.5px solid #1A8A5E', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
+          <div style={{ background: '#fff', border: '1.5px solid #2563EB', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ width: 7, height: 18, borderRadius: 4, background: '#1A8A5E' }} />
+              <span style={{ width: 7, height: 18, borderRadius: 4, background: '#2563EB' }} />
               <div style={{ fontSize: 16, fontWeight: 800 }}>Resep per Batch ({res.batchInfo.batchSizeKg} kg)</div>
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#3E8C68', marginBottom: 10, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#3568C7', marginBottom: 10, lineHeight: 1.4 }}>
               {batchInstruksi(res.batchInfo)}
             </div>
             {res.resepPerBatch.map((it, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F2EEE2' }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{it.name}</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: '#11623F' }}>{it.jumlahKg.toFixed(2).replace('.', ',')} kg</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#1D4ED8' }}>{it.jumlahKg.toFixed(2).replace('.', ',')} kg</span>
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9AA69E', minWidth: 42, textAlign: 'right' }}>{it.persentase.toFixed(1)}%</span>
                 </div>
               </div>
@@ -131,13 +131,13 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
 
         {/* Biaya highlight */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ background: 'linear-gradient(135deg,#1A8A5E 0%,#11623F 100%)', borderRadius: 18, padding: 16, color: '#fff', boxShadow: '0 6px 16px rgba(17,98,63,.2)' }}>
+          <div style={{ background: 'linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)', borderRadius: 18, padding: 16, color: '#fff', boxShadow: '0 6px 16px rgba(29,78,216,.2)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, textTransform: 'uppercase', letterSpacing: '.05em' }}>Biaya / kg</div>
             <div style={{ fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', marginTop: 5, lineHeight: 1 }}>{rp(entry.biayaPerKg)}</div>
           </div>
           <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#9AA69E', textTransform: 'uppercase', letterSpacing: '.05em' }}>Hemat vs pasar</div>
-            <div style={{ fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', marginTop: 5, lineHeight: 1, color: '#15724B' }}>{rp(hemat)}<span style={{ fontSize: 13, color: '#9AA69E', fontWeight: 700 }}>/kg</span></div>
+            <div style={{ fontSize: 23, fontWeight: 800, letterSpacing: '-.02em', marginTop: 5, lineHeight: 1, color: '#1D4ED8' }}>{rp(hemat)}<span style={{ fontSize: 13, color: '#9AA69E', fontWeight: 700 }}>/kg</span></div>
           </div>
         </div>
 
@@ -168,7 +168,7 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
               <div style={{ fontSize: 14, fontWeight: 700 }}>{n.parameter}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 15, fontWeight: 800, minWidth: 64, textAlign: 'right' }}>{n.nilai.toFixed(2).replace('.', ',')} {n.parameter === 'Diameter Pelet' ? 'mm' : '%'}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 999, background: n.status === 'SESUAI' ? '#E2F1E7' : '#FBE7E1', color: n.status === 'SESUAI' ? '#15724B' : '#9E3D27', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 999, background: n.status === 'SESUAI' ? '#E1EBFB' : '#FBE7E1', color: n.status === 'SESUAI' ? '#1D4ED8' : '#9E3D27', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
                   {n.status === 'SESUAI' ? '✓' : '✕'} {n.batasSni}
                 </span>
               </div>
@@ -194,13 +194,13 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
         {/* Langkah Produksi */}
         <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <span style={{ width: 7, height: 18, borderRadius: 4, background: '#11623F' }} />
+            <span style={{ width: 7, height: 18, borderRadius: 4, background: '#1D4ED8' }} />
             <div style={{ fontSize: 16, fontWeight: 800 }}>Langkah Produksi</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
             {res.parameterMesin.urutanProses.map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <span style={{ flexShrink: 0, width: 25, height: 25, borderRadius: 8, background: '#E4F1E9', color: '#15724B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{i + 1}</span>
+                <span style={{ flexShrink: 0, width: 25, height: 25, borderRadius: 8, background: '#E1EBFB', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{i + 1}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.5, color: '#3A4742', paddingTop: 2 }}>{step.replace(/^\d+\.\s*/, '')}</span>
               </div>
             ))}
@@ -226,7 +226,7 @@ export default function ResultScreen({ entry, onBack }: ResultScreenProps) {
             cursor: kirimStatus === 'sending' ? 'wait' : 'pointer',
             border: 'none',
             background:
-              kirimStatus === 'sent' ? '#1A8A5E' : kirimStatus === 'error' ? '#C24B3A' : '#11623F',
+              kirimStatus === 'sent' ? '#2563EB' : kirimStatus === 'error' ? '#C24B3A' : '#1D4ED8',
             color: '#fff',
           }}
         >
