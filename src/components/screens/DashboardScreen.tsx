@@ -3,6 +3,7 @@ import AppShell from '@/components/ui/AppShell';
 import BottomNav from '@/components/ui/BottomNav';
 import Sidebar from '@/components/ui/Sidebar';
 import { RiwayatEntry } from '@/lib/types';
+import { PASAR_PRICE } from '@/lib/constants';
 import { rp, todayStr } from '@/lib/helpers';
 
 const historyChipStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: '#F6F3EA', color: '#6B7A6F' };
@@ -10,7 +11,7 @@ import logo from '../../../assets/Logo_PelletQ-AI.png';
 
 interface DashboardScreenProps {
   riwayat: RiwayatEntry[];
-  fishSpeciesId: string;
+  machineOnline: boolean;
   renamingId: string | null;
   renameValue: string;
   deletingId: string | null;
@@ -29,11 +30,23 @@ interface DashboardScreenProps {
 }
 
 export default function DashboardScreen({
-  riwayat, fishSpeciesId, renamingId, renameValue, deletingId,
+  riwayat, machineOnline, renamingId, renameValue, deletingId,
   onStart, onGoIngredients, onGoHelp, onLogout, onOpenDetail,
   onStartRename, onRenameInput, onSaveRename, onCancelRename,
   onStartDelete, onConfirmDelete, onCancelDelete,
 }: DashboardScreenProps) {
+  // Total hemat dibanding beli pasaran — sama seperti "Hemat vs pasar" di
+  // layar hasil per formulasi (lihat ResultScreen), diakumulasi lintas
+  // seluruh riwayat.
+  let totalHemat = 0;
+  let totalPasar = 0;
+  for (const r of riwayat) {
+    const pasar = PASAR_PRICE[r.fase] ?? 12500;
+    totalHemat += Math.max(0, pasar - r.biayaPerKg) * r.targetKg;
+    totalPasar += pasar * r.targetKg;
+  }
+  const hematPct = totalPasar > 0 ? (totalHemat / totalPasar) * 100 : 0;
+
   return (
     <AppShell
       sidebar={
@@ -62,10 +75,10 @@ export default function DashboardScreen({
             WebkitTextFillColor: 'transparent',
           }}>PelletQ-AI</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 999, background: fishSpeciesId ? '#E1EBFB' : '#FBE9E5', border: `1px solid ${fishSpeciesId ? '#BFD6F5' : '#EDC4BB'}` }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: fishSpeciesId ? '#2563EB' : '#B9433A', boxShadow: fishSpeciesId ? '0 0 0 3px rgba(37,99,235,.18)' : '0 0 0 3px rgba(185,67,58,.16)', display: 'block' }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: fishSpeciesId ? '#1D4ED8' : '#9E3B30' }}>
-            {fishSpeciesId ? 'Sistem Aktif' : 'Menghubungkan…'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 999, background: machineOnline ? '#E1EBFB' : '#FBE9E5', border: `1px solid ${machineOnline ? '#BFD6F5' : '#EDC4BB'}` }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: machineOnline ? '#2563EB' : '#B9433A', boxShadow: machineOnline ? '0 0 0 3px rgba(37,99,235,.18)' : '0 0 0 3px rgba(185,67,58,.16)', display: 'block' }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: machineOnline ? '#1D4ED8' : '#9E3B30' }}>
+            {machineOnline ? 'Sistem Aktif' : 'Mesin Offline'}
           </span>
         </div>
       </div>
@@ -89,6 +102,17 @@ export default function DashboardScreen({
             <div style={{ fontSize: 15, fontWeight: 800, marginTop: 5, lineHeight: 1.2 }}>{riwayat[0]?.nama ?? '—'}</div>
             <div style={{ fontSize: 11.5, fontWeight: 600, opacity: .85, marginTop: 3 }}>{riwayat[0]?.tanggal ?? ''}</div>
           </div>
+        </div>
+
+        {/* Total hemat vs harga pasar — akumulasi seluruh riwayat */}
+        <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: '15px 16px', boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#7C8A82' }}>Total Hemat vs Harga Pasar</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#1D4ED8', letterSpacing: '-.03em', marginTop: 6, lineHeight: 1 }}>{rp(totalHemat)}</div>
+          {riwayat.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#7C8A82', marginTop: 6 }}>
+              Rata-rata {hematPct.toFixed(0)}% lebih murah dibanding beli pasaran
+            </div>
+          )}
         </div>
 
         {/* CTAs — hidden on desktop sidebar layout, where the sidebar already covers these actions */}

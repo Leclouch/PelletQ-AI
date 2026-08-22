@@ -41,7 +41,7 @@ export default function ResultScreen({ entry, onBack, onGoIngredients, onStartFo
       const r = await fetch('/api/formulation/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchInfo: res.batchInfo, resepPerBatch: res.resepPerBatch }),
+        body: JSON.stringify({ ingredients: res.formulasi.ingredients }),
       });
       if (!r.ok) throw new Error();
       setKirimStatus('sent');

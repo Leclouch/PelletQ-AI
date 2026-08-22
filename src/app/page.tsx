@@ -26,6 +26,7 @@ export default function HomePage() {
   const [ingredients, setIngredients] = useState<IngredientOption[]>([]);
   const [userAvailability, setUserAvailability] = useState<UserIngredientAvailability[]>([]);
   const [fishSpeciesId, setFishSpeciesId] = useState('');
+  const [machineOnline, setMachineOnline] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [diagnosa, setDiagnosa] = useState<Diagnosa[] | null>(null);
   const [penjelasanGagal, setPenjelasanGagal] = useState<string | null>(null);
@@ -35,6 +36,24 @@ export default function HomePage() {
     if (saved) { try { setRiwayat(JSON.parse(saved)); } catch {} }
     refreshIngredients();
     refreshAvailability();
+  }, []);
+
+  // Poll status ESP32 (online/offline via MQTT LWT) untuk badge "Sistem
+  // Aktif" — lihat src/app/api/machine/status.
+  useEffect(() => {
+    let cancelled = false;
+    const checkMachineStatus = async () => {
+      try {
+        const r = await fetch('/api/machine/status');
+        const data = await r.json();
+        if (!cancelled) setMachineOnline(data.status === 'online');
+      } catch {
+        if (!cancelled) setMachineOnline(false);
+      }
+    };
+    checkMachineStatus();
+    const interval = setInterval(checkMachineStatus, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const refreshIngredients = async () => {
@@ -189,7 +208,7 @@ export default function HomePage() {
   if (screen === 'dashboard') return (
     <DashboardScreen
       riwayat={riwayat}
-      fishSpeciesId={fishSpeciesId}
+      machineOnline={machineOnline}
       renamingId={renamingId}
       renameValue={renameValue}
       deletingId={deletingId}

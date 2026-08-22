@@ -4,9 +4,10 @@ import { publishRetained } from "@/lib/mqtt";
 
 // Endpoint untuk tombol "Kirim ke Mesin" — re-publish data formulasi (yang
 // sudah dihitung sebelumnya, dari layar hasil atau riwayat) ke topik MQTT
-// retained "pelletq/formulation". TIDAK mengirim command apa pun (start/open/
-// close/reset) — hanya data resep, sama seperti publish otomatis di
-// /api/formulation saat formulasi pertama kali dihitung.
+// retained "pelletq/formulation". TIDAK mengirim command apa pun (open/close)
+// — hanya data resep, sama seperti publish otomatis di /api/formulation saat
+// formulasi pertama kali dihitung. kg per ingridien = TOTAL formulasi (bukan
+// per batch — ESP32 tidak lagi punya konsep batch).
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -14,25 +15,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { batchInfo, resepPerBatch } = await req.json();
+    const { ingredients } = await req.json();
 
     if (
-      !batchInfo ||
-      typeof batchInfo.batchSizeKg !== "number" ||
-      typeof batchInfo.jumlahBatchPenuh !== "number" ||
-      typeof batchInfo.sisaKg !== "number" ||
-      !Array.isArray(resepPerBatch)
+      !Array.isArray(ingredients) ||
+      ingredients.some(
+        (i) => typeof i?.name !== "string" || typeof i?.jumlahKg !== "number"
+      )
     ) {
       return NextResponse.json({ error: "Payload formulasi tidak valid." }, { status: 400 });
     }
 
     await publishRetained("pelletq/formulation", {
-      batchSizeKg: batchInfo.batchSizeKg,
-      totalBatches: batchInfo.jumlahBatchPenuh + (batchInfo.sisaKg > 0 ? 1 : 0),
-      lastBatchKg: batchInfo.sisaKg,
-      ingredients: resepPerBatch.map((r: { name: string; jumlahKg: number }) => ({
-        name: r.name,
-        kg: r.jumlahKg,
+      ingredients: ingredients.map((i: { name: string; jumlahKg: number }) => ({
+        name: i.name,
+        kg: i.jumlahKg,
       })),
     });
 
