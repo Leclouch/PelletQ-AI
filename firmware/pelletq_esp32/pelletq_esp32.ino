@@ -2,14 +2,24 @@
  * ============================================================================
  * PelletQ-AI — ESP32 Hopper Gate Controller
  * ============================================================================
- * Monitoring suhu (MAX6675) + gerbang hopper (1x servo) antara mixer dan
- * extruder pada mesin pelet berpenggerak motor bensin.
+ * Monitoring suhu (MAX6675) + gerbang hopper (1x servo) + relay pemanas
+ * antara mixer dan extruder pada mesin pelet berpenggerak motor bensin.
  *
- * ESP32 TIDAK mengontrol motor apa pun. Tugasnya hanya:
+ * ESP32 TIDAK mengontrol motor apa pun, dan TIDAK punya state machine
+ * bercabang lagi — perilakunya sepenuhnya otomatis mengikuti daya (hidup =
+ * jalan, mati = berhenti), tidak dikonfinasi oleh perintah start/reset:
  *   - Membaca suhu (thermocouple type-K via MAX6675)
- *   - Menjalankan state machine (IDLE/HEATING/MIXING/DISPENSING/ABORTED)
- *   - Menggerakkan satu servo (gerbang hopper buka/tutup)
- *   - Menampilkan status di TFT ILI9488 480x320
+ *   - Begitu menyala (dan cfg.autoStart aktif — default true), langsung
+ *     memanaskan; begitu suhu mencapai thresholdTemp, gerbang mulai siklus
+ *     buka/tutup berulang (openSeconds/closeSeconds) SELAMANYA — tidak ada
+ *     lagi lockout/abort otomatis kalau suhu sempat turun lagi
+ *   - Menggerakkan satu servo (gerbang hopper buka/tutup); command MQTT/serial
+ *     "open"/"close" tetap tersedia sebagai override manual independen
+ *   - Menyalakan/mematikan relay pemanas (bang-bang di sekitar thresholdTemp,
+ *     lihat updateHeaterControl) — aktif selama cfg.autoStart true, mati
+ *     otomatis kalau thermocouple lepas
+ *   - Menampilkan status + daftar bahan (kg per ingridien, total formulasi —
+ *     bukan per batch) di TFT, SELALU tampil apa pun fase pemanasan/siklusnya
  *   - Komunikasi MQTT (telemetry, command, config, event, LWT)
  *
  * ----------------------------------------------------------------------------
@@ -22,16 +32,18 @@
  * (B) Arduino IDE:
  *     TFT_eSPI TIDAK bisa menerima build flag dari Arduino IDE, jadi kamu
  *     HARUS mengonfigurasi User_Setup TFT_eSPI dengan nilai PERSIS berikut.
- *     (JANGAN pakai konfigurasi ILI9488 bawaan yang MOSI/SCK-nya beda.)
+ *     (JANGAN pakai konfigurasi ILI9341 bawaan yang MOSI/SCK-nya beda.)
  *
- *         #define ILI9488_DRIVER
+ *         #define ILI9341_DRIVER
+ *         #define TFT_WIDTH  240
+ *         #define TFT_HEIGHT 320
  *         #define TFT_MOSI 13
  *         #define TFT_SCLK 18
  *         #define TFT_CS   5
  *         #define TFT_DC   2
  *         #define TFT_RST  4
  *         #define TFT_MISO -1        // SDO TFT tidak dicolok
- *         #define SPI_FREQUENCY 27000000   // ILI9488 tidak stabil > 27 MHz
+ *         #define SPI_FREQUENCY 27000000
  *         #define LOAD_GLCD
  *         #define LOAD_FONT2
  *         #define LOAD_FONT4
@@ -44,18 +56,16 @@
  *   MAX6675 dibaca MANUAL lewat hardware SPI (lihat readMax6675Raw).
  * ----------------------------------------------------------------------------
  * BENCH TEST (serial, tanpa WiFi/MQTT) — ketik di Serial Monitor @115200:
- *   start        - sama seperti command MQTT "start" (IDLE -> HEATING)
- *   open         - sama seperti command MQTT "open"
- *   close        - sama seperti command MQTT "close"
- *   reset        - sama seperti command MQTT "reset" (paksa balik ke IDLE)
+ *   open         - sama seperti command MQTT "open" (override manual)
+ *   close        - sama seperti command MQTT "close" (override manual)
  *   temp <v>     - override tempC ke <v> (bench-only, TIDAK ada di MQTT),
  *                  contoh "temp 96" untuk memicu THRESHOLD_REACHED tanpa
  *                  memanaskan thermocouple sungguhan
  *   temp auto    - lepas override, lanjut baca MAX6675 asli
  *   formulation <json> - sama seperti pesan MQTT retained "pelletq/formulation"
  *                  (bench-only, TIDAK ada di MQTT command topic), contoh:
- *                  formulation {"batchSizeKg":5,"totalBatches":2,"lastBatchKg":2,
- *                  "ingredients":[{"name":"Tepung Ikan","kg":1.5}]}
+ *                  formulation {"ingredients":[{"name":"Tepung Ikan","kg":1.5}]}
+ *                  (kg per ingridien = TOTAL formulasi, bukan per batch)
  * ============================================================================
  */
 
@@ -88,6 +98,13 @@
 #define PIN_MAX_SO   34    // MAX6675 SO (MISO) — GPIO34 (input-only, ADC1_CH6)
 #define PIN_MAX_CS   26
 #define PIN_SERVO    27
+#define PIN_HEATER   3     // relay pemanas — CATATAN: GPIO3 = UART0 RX (dipakai
+                           // Serial Monitor via USB). Kalau upload/serial jadi
+                           // aneh setelah relay dicolok, pindahkan ke GPIO lain.
+
+// Sebagian besar modul relay 1-channel murah aktif-LOW (LOW = kontak nyala).
+// Ganti ke false kalau modul relaymu aktif-HIGH.
+#define RELAY_ACTIVE_LOW true
 
 // ============================================================================
 // MQTT TOPICS
@@ -105,20 +122,19 @@
 // KONFIGURASI (default hardcoded — dipakai hanya jika belum ada retained config)
 // ============================================================================
 struct Config {
-  float thresholdTemp  = 95.0f;   // suhu ambang masuk MIXING (C)
-  int   waitMinutes    = 7;       // durasi standby MIXING (menit)
-  int   openSeconds    = 30;      // durasi servo buka saat DISPENSING (detik)
-  int   warnBelowSec   = 60;      // suhu turun >= ini -> banner peringatan
-  int   abortBelowSec  = 420;     // suhu turun >= ini -> ABORTED (7 menit)
+  float thresholdTemp  = 95.0f;   // suhu ambang mulai siklus buka/tutup (C)
+  int   openSeconds    = 10;      // durasi servo buka tiap siklus (detik)
+  int   closeSeconds   = 10;      // durasi servo tutup tiap siklus (detik)
   int   servoOpenAngle = 90;      // sudut servo saat buka
   int   servoCloseAngle= 0;       // sudut servo saat tutup
-  bool  autoStart      = false;   // otomatis HEATING saat boot?
+  bool  autoStart      = true;    // jalan otomatis begitu menyala? (matikan via config kalau perlu bench manual)
+  float heaterHysteresis = 2.0f;  // histeresis relay pemanas (C) di sekitar thresholdTemp
 } cfg;
 
 // ============================================================================
 // FORMULASI (diterima via MQTT retained "pelletq/formulation" atau bench
-// serial "formulation <json>") — kg per ingridien untuk SATU batch penuh;
-// batch terakhir (jika lastBatchKg > 0) di-skalakan di sisi ESP32.
+// serial "formulation <json>") — kg per ingridien adalah TOTAL formulasi
+// (bukan per batch — tidak ada lagi konsep batch di ESP32).
 // ============================================================================
 #define MAX_INGREDIENTS 12
 struct Ingredient {
@@ -127,25 +143,20 @@ struct Ingredient {
 };
 Ingredient formulationIngredients[MAX_INGREDIENTS];
 int   ingredientCount   = 0;
-float batchSizeKg       = 0;
-int   totalBatches      = 0;
-float lastBatchKg       = 0;      // 0 = semua batch ukuran penuh
-int   currentBatch      = 1;      // 1-indexed, direset saat formulasi baru masuk
-bool  formulationDirty  = false;  // true = layar IDLE perlu digambar ulang
+bool  formulationDirty  = false;  // true = daftar bahan di layar perlu digambar ulang
 
 // ============================================================================
-// STATE MACHINE
+// OTOMASI — tidak ada state machine lagi, cuma satu saklar: cfg.autoStart.
+// Begitu true, alat memanaskan sampai threshold lalu langsung mulai siklus
+// buka/tutup SELAMANYA (lihat updateAutomation) — tidak ada lockout/abort
+// otomatis, dan tidak bisa "unlatch" balik ke fase pemanasan kecuali
+// cfg.autoStart dimatikan lalu dinyalakan lagi via config.
 // ============================================================================
-enum State { ST_IDLE, ST_HEATING, ST_MIXING, ST_DISPENSING, ST_ABORTED };
-State state = ST_IDLE;
+bool reachedThreshold = false;   // true = sudah lewati threshold, sedang siklus
 
-// Timing (semua non-blocking, basis millis)
-unsigned long mixDeadlineMs   = 0;   // kapan countdown MIXING habis
-unsigned long dispenseEndMs   = 0;   // kapan servo tutup lagi saat DISPENSING
-unsigned long belowStartMs    = 0;   // awal periode kontinu suhu < threshold (0 = tidak)
-unsigned long belowSec        = 0;   // durasi kontinu di bawah threshold (detik)
-bool warnPublished            = false;
-bool autoStartDone            = false;
+// Timing siklus buka/tutup (semua non-blocking, basis millis)
+unsigned long dispensePhaseEndMs = 0;   // kapan siklus buka/tutup saat ini berakhir
+bool          dispenseOpenPhase  = true; // true = servo sedang di fase buka
 
 // Sensor
 float tempC        = 0.0f;
@@ -158,6 +169,10 @@ int   sampleCount  = 0;
 // Servo
 Servo hopperServo;
 const char* servoStateStr = "CLOSED";
+
+// Relay pemanas — kontrol bang-bang (histeresis) di sekitar cfg.thresholdTemp,
+// aktif hanya selama cfg.autoStart true (lihat updateHeaterControl).
+bool heaterOn = false;
 
 // Konektivitas. esp-mqtt menjalankan koneksi/reconnect-nya pada task IDF;
 // semua publish tetap hanya dilakukan setelah event CONNECTED.
@@ -199,7 +214,7 @@ uint16_t readMax6675Raw();
 void readTemperature();
 void setTempOverride(float v);
 void clearTempOverride();
-void updateStateMachine();
+void updateAutomation();
 void updateDisplay();
 void handleMqtt();
 void startMqttClient();
@@ -211,13 +226,12 @@ void publishTelemetry();
 void publishEvent(const char* ev);
 void applyConfig(JsonDocument& doc);
 void applyFormulation(JsonDocument& doc);
-void advanceBatch();
 void handleCommand(const char* action);
 void handleSerialCommand();
 void openHopper();
 void closeHopper();
-void enterState(State s);
-const char* stateName(State s);
+void setHeater(bool on);
+void updateHeaterControl();
 
 // ============================================================================
 // SETUP
@@ -234,19 +248,23 @@ void setup() {
   pinMode(PIN_MAX_CS, OUTPUT);
   digitalWrite(PIN_MAX_CS, HIGH);
 
+  // Relay pemanas mati dulu sebelum apa pun lain diinisialisasi (fail-safe).
+  pinMode(PIN_HEATER, OUTPUT);
+  setHeater(false);
+
   // Inisialisasi TFT (TFT_eSPI meng-init VSPI dengan TFT_MISO = -1).
   tft.init();
-  tft.setRotation(3);            // landscape 480x320, flipped 180 deg
+  tft.setRotation(3);            // landscape 320x240 — ganti ke 1 bila gambar terbalik/cermin
   tft.fillScreen(TFT_BLACK);
 
   // Bus HSPI khusus MAX6675 — read-only, jadi MOSI tidak dipakai (-1).
   maxSpi.begin(PIN_MAX_SCK, PIN_MAX_SO, -1, -1);
 
   // Header statis (tidak pernah berubah)
-  tft.setFreeFont(&FreeSansBold12pt7b);
+  tft.setFreeFont(&FreeSansBold9pt7b);
   tft.setTextDatum(TL_DATUM);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
-  tft.drawString("PelletQ-AI", 10, 10);
+  tft.drawString("PelletQ-AI", 4, 3);
 
   // Servo
   ESP32PWM::allocateTimer(0);
@@ -260,8 +278,6 @@ void setup() {
   // WiFi (non-blocking; loop yang menjaga reconnect)
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  enterState(ST_IDLE);
 }
 
 // ============================================================================
@@ -290,7 +306,7 @@ void handleSerialCommand() {
       applyFormulation(doc);
     }
   } else {
-    handleCommand(line.c_str());   // start / open / close / reset
+    handleCommand(line.c_str());   // open / close
   }
 }
 
@@ -300,7 +316,7 @@ void handleSerialCommand() {
 void loop() {
   unsigned long now = millis();
 
-  handleSerialCommand();   // bench-test: start/open/close/reset/temp via Serial
+  handleSerialCommand();   // bench-test: open/close/temp/formulation via Serial
   handleMqtt();   // jaga WiFi dan mulai esp-mqtt bila jaringan siap
   dispatchQueuedMqttMessages();
 
@@ -309,7 +325,8 @@ void loop() {
     readTemperature();
   }
 
-  updateStateMachine();                    // tiap loop (pakai millis internal)
+  updateAutomation();                      // tiap loop (pakai millis internal)
+  updateHeaterControl();                   // bang-bang relay pemanas, tiap loop
 
   if (now - lastDisplayMs >= 250) {        // refresh TFT tiap 250 ms
     lastDisplayMs = now;
@@ -373,99 +390,47 @@ void clearTempOverride() {
 }
 
 // ============================================================================
-// STATE MACHINE
+// OTOMASI — tidak ada state machine; satu fungsi, satu saklar (cfg.autoStart).
 // ============================================================================
-void enterState(State s) {
-  Serial.printf("[state] %s -> %s\n", stateName(state), stateName(s));
-  state = s;
-  switch (s) {
-    case ST_IDLE:
-      closeHopper();
-      break;
-    case ST_HEATING:
-      // menunggu suhu naik; servo tetap tutup
-      closeHopper();
-      break;
-    case ST_MIXING:
-      closeHopper();
-      mixDeadlineMs = millis() + (unsigned long)cfg.waitMinutes * 60000UL;
-      belowStartMs = 0;
-      belowSec = 0;
-      warnPublished = false;
-      break;
-    case ST_DISPENSING:
-      openHopper();
-      dispenseEndMs = millis() + (unsigned long)cfg.openSeconds * 1000UL;
-      publishEvent("DISPENSING_START");
-      break;
-    case ST_ABORTED:
-      closeHopper();               // pastikan gerbang tertutup
-      publishEvent("ABORTED");
-      break;
-  }
-}
-
-void updateStateMachine() {
+void updateAutomation() {
   unsigned long now = millis();
 
-  switch (state) {
-    case ST_IDLE:
-      // autoStart hanya sekali, saat masih IDLE awal
-      if (cfg.autoStart && !autoStartDone) {
-        autoStartDone = true;
-        enterState(ST_HEATING);
-      }
-      break;
-
-    case ST_HEATING:
-      if (!tcOpen && tempC >= cfg.thresholdTemp) {
-        publishEvent("THRESHOLD_REACHED");
-        enterState(ST_MIXING);
-      }
-      break;
-
-    case ST_MIXING: {
-      // Hitung durasi kontinu di bawah threshold (abaikan saat TC lepas).
-      if (!tcOpen && tempC < cfg.thresholdTemp) {
-        if (belowStartMs == 0) belowStartMs = now;
-        belowSec = (now - belowStartMs) / 1000UL;
-      } else {
-        belowStartMs = 0;
-        belowSec = 0;
-        warnPublished = false;   // suhu pulih -> hapus status peringatan
-      }
-
-      if (belowSec >= (unsigned long)cfg.abortBelowSec) {
-        enterState(ST_ABORTED);
-        break;
-      }
-      if (belowSec >= (unsigned long)cfg.warnBelowSec && !warnPublished) {
-        publishEvent("WARN_TEMP_DROP");
-        warnPublished = true;
-      }
-
-      // Countdown TETAP jalan apa pun kondisi suhu (kecuali sudah ABORT).
-      if ((long)(mixDeadlineMs - now) <= 0) {
-        enterState(ST_DISPENSING);
-      }
-      break;
+  if (!cfg.autoStart) {
+    // Dimatikan lewat config — gerbang tertutup, tidak memanaskan/mencetak.
+    // Membuka kembali cfg.autoStart selalu mulai dari awal (pemanasan dulu).
+    if (reachedThreshold) {
+      reachedThreshold = false;
+      closeHopper();
     }
+    return;
+  }
 
-    case ST_DISPENSING:
-      if ((long)(dispenseEndMs - now) <= 0) {
-        closeHopper();
-        publishEvent("CYCLE_COMPLETE");
-        advanceBatch();
-        enterState(ST_IDLE);
-      }
-      break;
+  if (!reachedThreshold) {
+    // Menunggu suhu naik; gerbang tetap tertutup (heater diurus terpisah
+    // oleh updateHeaterControl).
+    if (!tcOpen && tempC >= cfg.thresholdTemp) {
+      publishEvent("THRESHOLD_REACHED");
+      reachedThreshold = true;
+      openHopper();
+      dispenseOpenPhase = true;
+      dispensePhaseEndMs = now + (unsigned long)cfg.openSeconds * 1000UL;
+      publishEvent("DISPENSING_START");
+    }
+    return;
+  }
 
-    case ST_ABORTED:
-      // Suhu kembali >= threshold -> MIXING dengan countdown DI-RESET dari awal.
-      if (!tcOpen && tempC >= cfg.thresholdTemp) {
-        enterState(ST_MIXING);
-      }
-      break;
+  // Sudah melewati threshold — siklus buka/tutup berulang SELAMANYA, tidak
+  // ada lagi lockout/abort otomatis kalau suhu sempat turun lagi.
+  if ((long)(dispensePhaseEndMs - now) <= 0) {
+    if (dispenseOpenPhase) {
+      closeHopper();
+      dispenseOpenPhase = false;
+      dispensePhaseEndMs = now + (unsigned long)cfg.closeSeconds * 1000UL;
+    } else {
+      openHopper();
+      dispenseOpenPhase = true;
+      dispensePhaseEndMs = now + (unsigned long)cfg.openSeconds * 1000UL;
+    }
   }
 }
 
@@ -485,26 +450,39 @@ void closeHopper() {
 }
 
 // ============================================================================
-// COMMAND — dihormati di state mana pun (override manual)
+// RELAY PEMANAS — kontrol bang-bang (histeresis) di sekitar cfg.thresholdTemp
+// ============================================================================
+void setHeater(bool on) {
+  heaterOn = on;
+  digitalWrite(PIN_HEATER, on ? (RELAY_ACTIVE_LOW ? LOW : HIGH)
+                              : (RELAY_ACTIVE_LOW ? HIGH : LOW));
+  Serial.printf("[heater] %s\n", on ? "ON" : "OFF");
+}
+
+void updateHeaterControl() {
+  // Fail-safe: TC lepas, atau otomasi dimatikan -> pemanas mati.
+  if (tcOpen || !cfg.autoStart) {
+    if (heaterOn) setHeater(false);
+    return;
+  }
+
+  // Bang-bang: nyala di bawah (threshold - histeresis), mati di >= threshold.
+  if (heaterOn && tempC >= cfg.thresholdTemp) {
+    setHeater(false);
+  } else if (!heaterOn && tempC < cfg.thresholdTemp - cfg.heaterHysteresis) {
+    setHeater(true);
+  }
+}
+
+// ============================================================================
+// COMMAND — override manual gerbang, independen dari siklus otomatis
+// (updateAutomation tetap menimpanya di tick berikutnya kalau sedang siklus)
 // ============================================================================
 void handleCommand(const char* action) {
-  if (strcmp(action, "start") == 0) {
-    if (state == ST_IDLE) enterState(ST_HEATING);
-
-  } else if (strcmp(action, "open") == 0) {
-    openHopper();               // override manual, tidak mengubah state
-
+  if (strcmp(action, "open") == 0) {
+    openHopper();
   } else if (strcmp(action, "close") == 0) {
     closeHopper();
-    if (state == ST_DISPENSING) {   // batalkan sisa timer buka
-      publishEvent("CYCLE_COMPLETE");
-      advanceBatch();
-      enterState(ST_IDLE);
-    }
-
-  } else if (strcmp(action, "reset") == 0) {
-    autoStartDone = true;       // jangan auto-start lagi setelah reset manual
-    enterState(ST_IDLE);
   }
 }
 
@@ -522,31 +500,28 @@ void applyConfig(JsonDocument& doc) {
   // Semua field opsional — hanya timpa yang ada & valid.
   if (doc["thresholdTemp"].is<float>())
     cfg.thresholdTemp = clampF(doc["thresholdTemp"], 40.0f, 200.0f, cfg.thresholdTemp);
-  if (doc["waitMinutes"].is<int>())
-    cfg.waitMinutes = clampI(doc["waitMinutes"], 1, 60, cfg.waitMinutes);
   if (doc["openSeconds"].is<int>())
     cfg.openSeconds = clampI(doc["openSeconds"], 1, 300, cfg.openSeconds);
-  if (doc["warnBelowSec"].is<int>())
-    cfg.warnBelowSec = clampI(doc["warnBelowSec"], 10, 600, cfg.warnBelowSec);
-  if (doc["abortBelowSec"].is<int>())
-    cfg.abortBelowSec = clampI(doc["abortBelowSec"], 30, 3600, cfg.abortBelowSec);
+  if (doc["closeSeconds"].is<int>())
+    cfg.closeSeconds = clampI(doc["closeSeconds"], 1, 300, cfg.closeSeconds);
   if (doc["servoOpenAngle"].is<int>())
     cfg.servoOpenAngle = clampI(doc["servoOpenAngle"], 0, 180, cfg.servoOpenAngle);
   if (doc["servoCloseAngle"].is<int>())
     cfg.servoCloseAngle = clampI(doc["servoCloseAngle"], 0, 180, cfg.servoCloseAngle);
   if (doc["autoStart"].is<bool>())
     cfg.autoStart = doc["autoStart"];
+  if (doc["heaterHysteresis"].is<float>())
+    cfg.heaterHysteresis = clampF(doc["heaterHysteresis"], 0.5f, 20.0f, cfg.heaterHysteresis);
 
   // Ack config aktif (non-retained) untuk konfirmasi di web app.
   JsonDocument ack;
-  ack["thresholdTemp"]   = cfg.thresholdTemp;
-  ack["waitMinutes"]     = cfg.waitMinutes;
-  ack["openSeconds"]     = cfg.openSeconds;
-  ack["warnBelowSec"]    = cfg.warnBelowSec;
-  ack["abortBelowSec"]   = cfg.abortBelowSec;
-  ack["servoOpenAngle"]  = cfg.servoOpenAngle;
-  ack["servoCloseAngle"] = cfg.servoCloseAngle;
-  ack["autoStart"]       = cfg.autoStart;
+  ack["thresholdTemp"]     = cfg.thresholdTemp;
+  ack["openSeconds"]       = cfg.openSeconds;
+  ack["closeSeconds"]      = cfg.closeSeconds;
+  ack["servoOpenAngle"]    = cfg.servoOpenAngle;
+  ack["servoCloseAngle"]   = cfg.servoCloseAngle;
+  ack["autoStart"]         = cfg.autoStart;
+  ack["heaterHysteresis"]  = cfg.heaterHysteresis;
   char buf[256];
   size_t n = serializeJson(ack, buf, sizeof(buf));
   if (mqttOk && mqttClient != nullptr)
@@ -554,11 +529,6 @@ void applyConfig(JsonDocument& doc) {
 }
 
 void applyFormulation(JsonDocument& doc) {
-  batchSizeKg  = doc["batchSizeKg"]  | 0.0f;
-  totalBatches = doc["totalBatches"] | 0;
-  lastBatchKg  = doc["lastBatchKg"]  | 0.0f;
-  currentBatch = 1;
-
   ingredientCount = 0;
   JsonArray arr = doc["ingredients"].as<JsonArray>();
   for (JsonObject item : arr) {
@@ -570,19 +540,13 @@ void applyFormulation(JsonDocument& doc) {
     strncpy(formulationIngredients[ingredientCount].name, name,
             sizeof(formulationIngredients[ingredientCount].name) - 1);
     formulationIngredients[ingredientCount].name[sizeof(formulationIngredients[ingredientCount].name) - 1] = '\0';
+    // kg = TOTAL formulasi untuk ingridien ini (bukan per batch).
     formulationIngredients[ingredientCount].kg = item["kg"] | 0.0f;
     ingredientCount++;
   }
 
   formulationDirty = true;
-  Serial.printf("[formulation] %d ingridien, batchSizeKg=%.2f totalBatches=%d lastBatchKg=%.2f\n",
-                ingredientCount, batchSizeKg, totalBatches, lastBatchKg);
-}
-
-void advanceBatch() {
-  if (currentBatch < totalBatches) currentBatch++;
-  formulationDirty = true;
-  Serial.printf("[formulation] batch -> %d/%d\n", currentBatch, totalBatches);
+  Serial.printf("[formulation] %d ingridien diterima\n", ingredientCount);
 }
 
 // ============================================================================
@@ -604,7 +568,7 @@ void handleMqtt() {
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     }
-    return;                                  // offline: state machine tetap jalan
+    return;                                  // offline: heater/gerbang tetap jalan otomatis
   }
   if (!wasWifi) {
     wasWifi = true;
@@ -763,21 +727,19 @@ void publishTelemetry() {
   if (!mqttOk || mqttClient == nullptr) return;
 
   unsigned long remainingSec = 0;
-  if (state == ST_MIXING) {
-    long r = (long)(mixDeadlineMs - millis());
-    remainingSec = (r > 0) ? (unsigned long)(r / 1000) : 0;
-  } else if (state == ST_DISPENSING) {
-    long r = (long)(dispenseEndMs - millis());
+  if (reachedThreshold) {
+    long r = (long)(dispensePhaseEndMs - millis());
     remainingSec = (r > 0) ? (unsigned long)(r / 1000) : 0;
   }
 
   JsonDocument doc;
   if (tcOpen) doc["temp"] = nullptr;                 // null saat thermocouple lepas
   else        doc["temp"] = round(tempC * 10) / 10.0;
-  doc["state"]        = stateName(state);
+  doc["autoStart"]    = cfg.autoStart;
+  doc["ready"]        = reachedThreshold;   // true = sudah lewati threshold, sedang siklus
   doc["remainingSec"] = remainingSec;
-  doc["belowSec"]     = belowSec;
   doc["servo"]        = servoStateStr;
+  doc["heater"]       = heaterOn;
 
   char buf[192];
   size_t n = serializeJson(doc, buf, sizeof(buf));
@@ -795,273 +757,182 @@ void publishEvent(const char* ev) {
   esp_mqtt_client_publish(mqttClient, TOPIC_EVENT, buf, n, 0, false);
 }
 
-const char* stateName(State s) {
-  switch (s) {
-    case ST_IDLE:       return "IDLE";
-    case ST_HEATING:    return "HEATING";
-    case ST_MIXING:     return "MIXING";
-    case ST_DISPENSING: return "DISPENSING";
-    case ST_ABORTED:    return "ABORTED";
-  }
-  return "?";
-}
-
 // ============================================================================
 // DISPLAY — refresh hanya bagian yang berubah (hindari full clear tiap frame)
 // ============================================================================
-// Region layout (rotation 1, 480x320):
-//   Header    : y   0..40   (statis, digambar di setup + indikator dinamis)
-//   Suhu      : y  50..130
-//   State     : y 138..183
-//   Countdown : y 188..268  (MM:SS + progress bar + sub-note)   [ST_MIXING]
-//   Banner    : y 272..320                                     [ST_ABORTED / suhu-turun warning]
-//   IDLE list : y 185..320  (batch info + hingga 4 baris ingridien +
-//               "+N lainnya", termasuk seluruh area Countdown & Banner di
-//               atas) — dipakai hanya saat ST_IDLE, lihat blok ST_IDLE di
-//               updateDisplay(). Baris ke-4 & marker overflow HARUS berhenti
-//               sebelum y301 (awal footer "Target: ..C") pada x0-105, karena
-//               footer itu digambar ulang tiap ~250ms terlepas dari state.
-//               Sebelum menambah drawString baru di region ini, cek dulu
-//               tabrakan dengan footer target & fillRect(0,300,200,20).
+// Layout 320x240 (rotation 3, panel ILI9341 3.2" — versi lama didesain untuk
+// ILI9488 480x320; layar fisik yang terpasang jauh lebih kecil jadi seluruh
+// layout ditulis ulang, bukan sekadar diskalakan):
+//   Header       : y  0..22   (statis: judul + dot WiFi/MQTT/heater, digambar
+//                  sekali di setup(), dot-nya sendiri dinamis)
+//   Suhu + Fase  : y 24..66   (suhu kiri, label fase kanan — satu baris.
+//                  Label fase: "OFF" kalau cfg.autoStart mati, "PANAS"
+//                  sebelum threshold, "CETAK" sesudahnya — sengaja singkat,
+//                  bukan nama state, cuma turunan langsung dari
+//                  reachedThreshold — lihat catatan lebar font di updateDisplay)
+//   Info bar     : y 66..84   (kiri: status siklus — "Menunggu suhu naik...",
+//                  atau "Buka Ns"/"Tutup Ns" saat mencetak; kanan: Target
+//                  NNC — SELALU tampil apa pun fasenya)
+//   Body         : y 88..240  (152px) — SELALU daftar bahan (nama + kg TOTAL
+//                  formulasi, bukan per batch — tidak ada lagi konsep batch),
+//                  autoscroll (geser 1 baris tiap SCROLL_INTERVAL_MS) kalau
+//                  jumlah bahan > SCROLL_VISIBLE_ROWS, plus titik indikator
+//                  posisi di baris paling bawah. Tidak lagi berubah bentuk
+//                  tergantung fase — itu sekarang cuma di info bar.
 // ----------------------------------------------------------------------------
-static uint16_t stateColor(State s) {
-  switch (s) {
-    case ST_IDLE:       return TFT_DARKGREY;
-    case ST_HEATING:    return TFT_ORANGE;
-    case ST_MIXING:     return TFT_BLUE;
-    case ST_DISPENSING: return TFT_GREEN;
-    case ST_ABORTED:    return TFT_RED;
-  }
-  return TFT_WHITE;
-}
+
+// Autoscroll daftar bahan — hanya aktif kalau ingredientCount melebihi
+// jumlah baris yang muat sekaligus.
+constexpr int SCROLL_VISIBLE_ROWS   = 5;
+constexpr unsigned long SCROLL_INTERVAL_MS = 1800;
+int           scrollOffset  = 0;
+unsigned long lastScrollMs  = 0;
 
 void updateDisplay() {
-  static State  prevState   = (State)255;
-  static String prevTemp    = "";
-  static String prevRemain  = "";
-  static int    prevBanner  = -99;    // 0 none, 1 warn, 2 abort
-  static int    prevWifi    = -1;
-  static int    prevMqtt    = -1;
-  static String prevTarget  = "";
-  static String prevSubNote = "";
-  static bool   prevOverride = false;  // untuk deteksi toggle tempOverrideActive
+  static String prevTemp            = "";
+  static String prevPhaseLabel      = "";
+  static String prevInfoBar         = "";
+  static int    prevWifi            = -1;
+  static int    prevMqtt            = -1;
+  static bool   prevOverride        = false;  // deteksi toggle tempOverrideActive
+  static int    prevScrollOffset    = -1;
+  static int    prevIngredientCount = -1;
+  static int    prevHeater          = -1;
 
-  bool full = false;
-  if (state != prevState) {           // ganti state -> bersihkan body sekali
-    tft.fillRect(0, 45, 480, 275, TFT_BLACK);
-    prevState = state;
-    prevTemp = ""; prevRemain = ""; prevBanner = -99; prevSubNote = "";
-    full = true;
-  }
-
-  // --- Header: indikator WiFi & MQTT (dot kecil) ---
+  // --- Header: indikator WiFi & MQTT & heater (dot kecil) ---
   if ((int)wifiOk != prevWifi) {
     prevWifi = wifiOk;
-    tft.fillCircle(410, 22, 7, wifiOk ? TFT_GREEN : TFT_RED);
+    tft.fillCircle(240, 11, 5, wifiOk ? TFT_GREEN : TFT_RED);
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("W", 398, 22);
+    tft.drawString("W", 232, 11);
   }
   if ((int)mqttOk != prevMqtt) {
     prevMqtt = mqttOk;
-    tft.fillCircle(460, 22, 7, mqttOk ? TFT_GREEN : TFT_RED);
+    tft.fillCircle(300, 11, 5, mqttOk ? TFT_GREEN : TFT_RED);
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextDatum(MR_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("M", 448, 22);
+    tft.drawString("M", 292, 11);
+  }
+  if ((int)heaterOn != prevHeater) {
+    prevHeater = heaterOn;
+    tft.fillCircle(168, 11, 5, heaterOn ? TFT_ORANGE : TFT_DARKGREY);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextDatum(MR_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString("H", 160, 11);
   }
 
-  // --- Suhu besar ---
-  String tempStr = tcOpen ? "TC OPEN" : String(tempC, 1);
-  if (tempStr != prevTemp || full || tempOverrideActive != prevOverride) {
+  // --- Suhu (kiri) ---
+  String tempStr = tcOpen ? "TC OPEN" : (String(tempC, 1) + "C");
+  if (tempStr != prevTemp || tempOverrideActive != prevOverride) {
     prevTemp = tempStr;
     prevOverride = tempOverrideActive;
-    tft.fillRect(0, 50, 480, 80, TFT_BLACK);
+    tft.fillRect(0, 24, 200, 42, TFT_BLACK);
     uint16_t col = TFT_WHITE;
-    if (tcOpen)                                        col = TFT_RED;
-    else if (state == ST_MIXING && tempC < cfg.thresholdTemp) col = TFT_ORANGE;
-
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(col, TFT_BLACK);
-    if (tcOpen) {
-      tft.setFreeFont(&FreeSansBold18pt7b);
-      tft.drawString("TC OPEN", 240, 90);
-    } else {
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.drawString(tempStr, 210, 90);
-      // unit "°C" — degree digambar manual (font GFX tidak punya glyph derajat)
-      tft.drawCircle(322, 74, 5, col);
-      tft.setFreeFont(&FreeSansBold18pt7b);
-      tft.setTextDatum(ML_DATUM);
-      tft.drawString("C", 332, 92);
-    }
-
-    // Indikator override manual (bench-test "temp <v>") — label terpisah di
-    // pojok kanan area suhu, area ini kosong (angka+lingkaran+"C" hanya
-    // menempati bagian tengah), jadi tidak ada risiko overflow/overlap.
-    if (tempOverrideActive) {
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MR_DATUM);
-      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-      tft.drawString("OVERRIDE", 475, 60);
-    }
-  }
-
-  // --- State ---
-  if (full) {
-    tft.fillRect(0, 138, 480, 45, TFT_BLACK);
+    if (tcOpen)                    col = TFT_RED;
+    else if (tempOverrideActive)   col = TFT_YELLOW;
     tft.setFreeFont(&FreeSansBold18pt7b);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(stateColor(state), TFT_BLACK);
-    tft.drawString(stateName(state), 240, 160);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(col, TFT_BLACK);
+    tft.drawString(tempStr, 4, 44);
   }
 
-  // --- Countdown / progress / sub-note ---
-  if (state == ST_MIXING) {
-    long r = (long)(mixDeadlineMs - millis());
-    unsigned long rem = (r > 0) ? (unsigned long)(r / 1000) : 0;
-    char mmss[8];
-    snprintf(mmss, sizeof(mmss), "%02lu:%02lu", rem / 60, rem % 60);
-    String remStr = mmss;
-    if (remStr != prevRemain) {
-      prevRemain = remStr;
-      tft.fillRect(120, 188, 240, 40, TFT_BLACK);
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.drawString(remStr, 240, 208);
+  // --- Fase (kanan, satu baris dengan suhu): OFF / PANAS / CETAK ---
+  // Sengaja singkat (bukan "MEMANASKAN"/"MENCETAK") — slot ini cuma 120px
+  // (x200..320) di font FreeSansBold12pt7b; kata yang lebih panjang meluber
+  // ke kiri ke area suhu dan bagian yang meluber itu kepotong tiap kali suhu
+  // redraw (hampir tiap frame). Detail fase lengkap sudah ada di info bar.
+  String phaseLabel = !cfg.autoStart ? "OFF" : (reachedThreshold ? "CETAK" : "PANAS");
+  if (phaseLabel != prevPhaseLabel) {
+    prevPhaseLabel = phaseLabel;
+    tft.fillRect(200, 24, 120, 42, TFT_BLACK);
+    tft.setFreeFont(&FreeSansBold12pt7b);
+    tft.setTextDatum(MR_DATUM);
+    uint16_t col = !cfg.autoStart ? TFT_DARKGREY : (reachedThreshold ? TFT_GREEN : TFT_ORANGE);
+    tft.setTextColor(col, TFT_BLACK);
+    tft.drawString(phaseLabel, 314, 44);
+  }
 
-      // progress bar
-      long total = (long)cfg.waitMinutes * 60;
-      long elapsed = total - (long)rem;
-      if (elapsed < 0) elapsed = 0;
-      int w = (int)(360.0 * elapsed / total);
-      tft.drawRect(60, 238, 360, 18, TFT_WHITE);
-      tft.fillRect(61, 239, 358, 16, TFT_BLACK);
-      tft.fillRect(61, 239, (w > 358 ? 358 : w), 16, TFT_BLUE);
-    }
-    // sub-note "suhu turun" (belowSec kecil, belum warn)
-    String note = "";
-    if (belowSec > 0 && belowSec < (unsigned long)cfg.warnBelowSec) note = "suhu turun";
-    if (note != prevSubNote) {
-      prevSubNote = note;
-      tft.fillRect(0, 258, 480, 12, TFT_BLACK);
-      if (note.length()) {
-        tft.setFreeFont(&FreeSans9pt7b);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft.drawString(note, 240, 264);
-      }
-    }
-  } else if (state == ST_DISPENSING) {
-    long r = (long)(dispenseEndMs - millis());
+  // --- Info bar: status siklus (kiri) + Target NNC (kanan), selalu tampil ---
+  String infoBar;
+  if (!cfg.autoStart) {
+    infoBar = "Otomasi nonaktif";
+  } else if (!reachedThreshold) {
+    infoBar = "Menunggu suhu naik...";
+  } else {
+    long r = (long)(dispensePhaseEndMs - millis());
     unsigned long rem = (r > 0) ? (unsigned long)(r / 1000) : 0;
-    String remStr = String(rem) + "s";
-    if (remStr != prevRemain) {
-      prevRemain = remStr;
-      tft.fillRect(0, 188, 480, 70, TFT_BLACK);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_GREEN, TFT_BLACK);
-      tft.drawString("HOPPER TERBUKA", 240, 202);
-      tft.setFreeFont(&FreeSansBold24pt7b);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      tft.drawString(remStr, 240, 238);
-    }
-  } else if (state == ST_IDLE && (full || formulationDirty)) {
+    char b[24];
+    snprintf(b, sizeof(b), "%s %lus", dispenseOpenPhase ? "Buka" : "Tutup", rem);
+    infoBar = String(b);
+  }
+  char t[20];
+  snprintf(t, sizeof(t), "Target: %.0fC", cfg.thresholdTemp);
+  String infoBarKey = infoBar + "|" + t;
+  if (infoBarKey != prevInfoBar) {
+    prevInfoBar = infoBarKey;
+    tft.fillRect(0, 66, 320, 18, TFT_BLACK);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.drawString(infoBar, 4, 66);
+    tft.setTextDatum(TR_DATUM);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.drawString(t, 316, 66);
+  }
+
+  // --- Body: daftar bahan (kg TOTAL formulasi, bukan per batch) — SELALU
+  // tampil, apa pun fase pemanasan/siklusnya (lihat komentar layout di atas).
+  unsigned long now = millis();
+  bool needsScroll = ingredientCount > SCROLL_VISIBLE_ROWS;
+
+  if (needsScroll && (now - lastScrollMs >= SCROLL_INTERVAL_MS)) {
+    lastScrollMs = now;
+    scrollOffset = (scrollOffset + 1) % ingredientCount;
+  }
+  if (!needsScroll) scrollOffset = 0;
+
+  bool ingredientsChanged = formulationDirty || ingredientCount != prevIngredientCount;
+  if (ingredientsChanged || scrollOffset != prevScrollOffset) {
+    prevIngredientCount = ingredientCount;
+    prevScrollOffset = scrollOffset;
     formulationDirty = false;
-    // Tinggi 135 (bukan 125) supaya y185-320 tercakup penuh, termasuk area
-    // banner (y272-320) di bawahnya — lihat catatan di blok banner: ini
-    // mencegah fillRect banner menimpa baris ingridien yang baru digambar.
-    tft.fillRect(0, 185, 480, 135, TFT_BLACK);
+    tft.fillRect(0, 88, 320, 152, TFT_BLACK);
 
-    if (ingredientCount > 0) {
-      char batchStr[24];
-      snprintf(batchStr, sizeof(batchStr), "Batch %d/%d", currentBatch, totalBatches);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(TC_DATUM);
-      tft.setTextColor(TFT_CYAN, TFT_BLACK);
-      tft.drawString(batchStr, 240, 188);
-
-      bool  isLastPartial = (currentBatch == totalBatches) && (lastBatchKg > 0) && (batchSizeKg > 0);
-      float scale = isLastPartial ? (lastBatchKg / batchSizeKg) : 1.0f;
-
+    if (ingredientCount == 0) {
+      tft.setFreeFont(&FreeSans9pt7b);
+      tft.setTextDatum(MC_DATUM);
+      tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+      tft.drawString("(belum ada formulasi)", 160, 160);
+    } else {
       tft.setFreeFont(&FreeSans9pt7b);
       tft.setTextDatum(TL_DATUM);
       tft.setTextColor(TFT_WHITE, TFT_BLACK);
-      int rowY = 220;
-      // maxRows=4: baris terakhir jatuh di y274 (glyph ~y274-291), berhenti
-      // sebelum footer target (y301+) di x0-105 — lihat catatan region layout
-      // di atas. JANGAN naikkan lagi tanpa menghitung ulang batas footer.
-      int maxRows = 4;
-      int shown = (ingredientCount < maxRows) ? ingredientCount : maxRows;
+      int rowY = 92;
+      int shown = (ingredientCount < SCROLL_VISIBLE_ROWS) ? ingredientCount : SCROLL_VISIBLE_ROWS;
       for (int i = 0; i < shown; i++) {
+        int idx = (scrollOffset + i) % ingredientCount;   // jendela geser
         char row[40];
-        snprintf(row, sizeof(row), "%-18s %5.2f kg",
-                 formulationIngredients[i].name, formulationIngredients[i].kg * scale);
-        tft.drawString(row, 20, rowY);
-        rowY += 18;
+        snprintf(row, sizeof(row), "%-16s %5.2f kg",
+                 formulationIngredients[idx].name, formulationIngredients[idx].kg);
+        tft.drawString(row, 6, rowY);
+        rowY += 24;
       }
-      if (ingredientCount > shown) {
-        char more[24];
-        snprintf(more, sizeof(more), "+%d lainnya", ingredientCount - shown);
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-        // Digambar di x300 (bukan x20) supaya di luar jangkauan x footer
-        // target (x0-105) / fillRect clear-nya (x0-200) meski y-nya (292)
-        // sama dengan baris ke-5 yang lama.
-        tft.drawString(more, 300, rowY);
+
+      // Titik indikator posisi scroll — cuma digambar kalau memang scrolling.
+      if (needsScroll) {
+        int dotsY = 226;
+        int spacing = (ingredientCount > 1) ? (280 / (ingredientCount - 1)) : 0;
+        for (int i = 0; i < ingredientCount; i++) {
+          int dx = 20 + i * spacing;
+          bool active = (i == scrollOffset);
+          tft.fillCircle(dx, dotsY, active ? 3 : 2, active ? TFT_CYAN : TFT_DARKGREY);
+        }
       }
     }
-  }
-
-  // --- Target aktif (pojok kiri bawah, di atas banner) ---
-  String targetStr = "Target: " + String(cfg.thresholdTemp, 0) + "C";
-  if (targetStr != prevTarget) {
-    prevTarget = targetStr;
-    tft.fillRect(0, 300, 200, 20, TFT_BLACK);  // hanya sisi kiri, jangan tabrak banner tengah
-  }
-
-  // --- Banner peringatan (paling bawah) ---
-  int banner = 0;
-  if (state == ST_ABORTED) banner = 2;
-  else if (state == ST_MIXING && belowSec >= (unsigned long)cfg.warnBelowSec) banner = 1;
-
-  if (banner != prevBanner) {
-    prevBanner = banner;
-    if (banner == 2) {
-      tft.fillRect(0, 272, 480, 48, TFT_RED);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_WHITE, TFT_RED);
-      tft.drawString("DIHENTIKAN: SUHU TURUN > 7 MENIT", 240, 296);
-    } else if (banner == 1) {
-      tft.fillRect(0, 272, 480, 48, TFT_YELLOW);
-      tft.setFreeFont(&FreeSansBold12pt7b);
-      tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_BLACK, TFT_YELLOW);
-      tft.drawString("SUHU TURUN > 1 MENIT - PERIKSA MESIN", 240, 296);
-    } else if (state == ST_IDLE) {
-      // Saat IDLE, blok ST_IDLE di atas (baris ~838) SUDAH membersihkan
-      // y185-320 sekaligus (termasuk seluruh area banner y272-320) sebelum
-      // menggambar batch info + baris ingridien di panggilan yang sama —
-      // JANGAN fillRect lagi di sini, atau baris ke-4 (y274) dan marker
-      // "+N lainnya" (y292, x300) akan tertimpa hitam persis setelah digambar.
-      prevTarget = "";
-    } else {
-      tft.fillRect(0, 272, 480, 48, TFT_BLACK);
-      // gambar ulang target kecil karena banner bersih menimpa area bawah
-      prevTarget = "";
-    }
-  }
-
-  // Target kecil digambar setelah banner supaya tidak tertimpa (hanya saat normal)
-  if (banner == 0) {
-    tft.setFreeFont(&FreeSans9pt7b);
-    tft.setTextDatum(BL_DATUM);
-    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    tft.drawString(targetStr, 10, 318);
-    prevTarget = targetStr;
   }
 }
 

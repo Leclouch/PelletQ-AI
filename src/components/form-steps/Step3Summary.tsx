@@ -29,20 +29,20 @@ export default function Step3Summary({ form, onField, apiError, diagnosa, penjel
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Target produksi */}
-      <div style={{ background: '#E4F1E9', border: '1.5px solid #1A8A5E', borderRadius: 18, padding: 16 }}>
-        <label style={{ fontSize: 13, fontWeight: 700, color: '#15724B', marginBottom: 8, display: 'block' }}>Target Produksi Total</label>
+      <div style={{ background: '#E1EBFB', border: '1.5px solid #2563EB', borderRadius: 18, padding: 16 }}>
+        <label style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', marginBottom: 8, display: 'block' }}>Target Produksi Total</label>
         <div style={{ position: 'relative' }}>
-          <input value={form.targetProduksi} onChange={e => onField('targetProduksi', e.target.value)} inputMode="numeric" style={{ width: '100%', padding: '15px 50px 15px 16px', border: '1.5px solid #1A8A5E', borderRadius: 13, fontSize: 22, color: '#11623F', fontWeight: 800, background: '#FCFBF7' }} />
-          <span style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', fontSize: 15, fontWeight: 700, color: '#1A8A5E' }}>kg</span>
+          <input value={form.targetProduksi} onChange={e => onField('targetProduksi', e.target.value)} inputMode="numeric" style={{ width: '100%', padding: '15px 50px 15px 16px', border: '1.5px solid #2563EB', borderRadius: 13, fontSize: 22, color: '#1D4ED8', fontWeight: 800, background: '#FCFBF7' }} />
+          <span style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', fontSize: 15, fontWeight: 700, color: '#2563EB' }}>kg</span>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#3E8C68', marginTop: 9, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#3568C7', marginTop: 9, lineHeight: 1.4 }}>
           Mesin memproses {BATCH_KG} kg per batch. Resep akan disajikan per batch {BATCH_KG} kg{target > BATCH_KG ? ` (≈ ${batchLabel})` : ''}.
         </div>
       </div>
 
       {/* Ringkasan */}
       <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#15724B', marginBottom: 11 }}>Ringkasan</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#1D4ED8', marginBottom: 11 }}>Ringkasan</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             { k: 'Ikan & Fase', v: `Lele Dumbo · ${form.fase}` },

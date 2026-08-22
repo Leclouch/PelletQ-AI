@@ -355,12 +355,11 @@ export async function POST(req: NextRequest) {
     // menggagalkan response API kalau broker/ESP32 tidak terjangkau atau
     // MQTT_BROKER_URL belum di-set. Timeout & fallback konfigurasi sudah
     // ditangani di dalam publishRetained().
+    // kg = TOTAL formulasi per ingridien (bukan per batch — ESP32 tidak lagi
+    // punya konsep batch, lihat firmware/pelletq_esp32).
     try {
       await publishRetained("pelletq/formulation", {
-        batchSizeKg: batchInfo.batchSizeKg,
-        totalBatches: batchInfo.jumlahBatchPenuh + (batchInfo.sisaKg > 0 ? 1 : 0),
-        lastBatchKg: batchInfo.sisaKg,
-        ingredients: resepPerBatch.map((r) => ({ name: r.name, kg: r.jumlahKg })),
+        ingredients: lpResult.ingredients.map((ing) => ({ name: ing.name, kg: ing.jumlahKg })),
       });
     } catch (err) {
       console.error("[formulation] MQTT publish gagal:", err);

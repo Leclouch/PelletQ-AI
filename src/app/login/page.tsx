@@ -67,7 +67,7 @@ function LoginForm() {
             justifyContent: "center",
             background: "#fff",
             border: "1px solid #E7E1D2",
-            boxShadow: "0 12px 30px rgba(26,138,94,.18)",
+            boxShadow: "0 12px 30px rgba(37,99,235,.18)",
           }}
         >
           <Image src={logo} alt="Logo PelletQ-AI" width={66} height={66} priority unoptimized />
@@ -79,7 +79,7 @@ function LoginForm() {
               fontWeight: 800,
               letterSpacing: "-.03em",
               lineHeight: 1,
-              background: "linear-gradient(135deg, #7700FF 0%, #1A8A5E 100%)",
+              background: "linear-gradient(135deg, #7700FF 0%, #2563EB 100%)",
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
               WebkitTextFillColor: "transparent",
@@ -217,13 +217,13 @@ function LoginForm() {
             marginTop: 2,
             padding: 16,
             borderRadius: 16,
-            background: "linear-gradient(135deg,#1A8A5E 0%,#11623F 100%)",
+            background: "linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)",
             color: "#fff",
             fontSize: 16,
             fontWeight: 800,
             letterSpacing: "-.01em",
             cursor: submitting ? "default" : "pointer",
-            boxShadow: "0 8px 20px rgba(17,98,63,.24)",
+            boxShadow: "0 8px 20px rgba(29,78,216,.24)",
             opacity: submitting ? 0.75 : 1,
           }}
         >

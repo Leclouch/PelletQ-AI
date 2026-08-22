@@ -8,7 +8,7 @@ interface StickyHeaderProps {
 
 export default function StickyHeader({ onBack, title, subtitle, right, children }: StickyHeaderProps) {
   return (
-    <div style={{ background: 'rgba(246,242,233,.92)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 5, borderBottom: '1px solid #EDE7D8', padding: '14px 18px 12px' }}>
+    <div style={{ background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 5, borderBottom: '1px solid #F0F0F0', padding: '14px 18px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: children ? 14 : 0 }}>
         {onBack && (
           <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 12, background: '#fff', border: '1px solid #E8E2D4', cursor: 'pointer', color: '#46554E', flexShrink: 0 }}>
@@ -17,7 +17,7 @@ export default function StickyHeader({ onBack, title, subtitle, right, children 
         )}
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-.01em', color: '#1C2E27' }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, fontWeight: 700, color: '#1A8A5E' }}>{subtitle}</div>}
+          {subtitle && <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>{subtitle}</div>}
         </div>
         {right && <div style={{ flexShrink: 0 }}>{right}</div>}
       </div>

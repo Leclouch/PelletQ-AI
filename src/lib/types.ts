@@ -1,4 +1,4 @@
-export type Screen = 'dashboard' | 'form' | 'result' | 'ingredients';
+export type Screen = 'dashboard' | 'form' | 'result' | 'ingredients' | 'help';
 
 export interface IngredientOption {
   id: string;

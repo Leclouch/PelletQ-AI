@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { signOut } from 'next-auth/react';
 import DashboardScreen from '@/components/screens/DashboardScreen';
 import FormScreen from '@/components/screens/FormScreen';
 import ResultScreen from '@/components/screens/ResultScreen';
 import IngredientsScreen from '@/components/screens/IngredientsScreen';
+import HelpScreen from '@/components/screens/HelpScreen';
 import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult, Diagnosa } from '@/lib/types';
 import { DEFAULT_FORM, PHASE_MAP } from '@/lib/constants';
 import { todayStr, getDefaultBahan } from '@/lib/helpers';
@@ -24,6 +26,7 @@ export default function HomePage() {
   const [ingredients, setIngredients] = useState<IngredientOption[]>([]);
   const [userAvailability, setUserAvailability] = useState<UserIngredientAvailability[]>([]);
   const [fishSpeciesId, setFishSpeciesId] = useState('');
+  const [machineOnline, setMachineOnline] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [diagnosa, setDiagnosa] = useState<Diagnosa[] | null>(null);
   const [penjelasanGagal, setPenjelasanGagal] = useState<string | null>(null);
@@ -33,6 +36,24 @@ export default function HomePage() {
     if (saved) { try { setRiwayat(JSON.parse(saved)); } catch {} }
     refreshIngredients();
     refreshAvailability();
+  }, []);
+
+  // Poll status ESP32 (online/offline via MQTT LWT) untuk badge "Sistem
+  // Aktif" — lihat src/app/api/machine/status.
+  useEffect(() => {
+    let cancelled = false;
+    const checkMachineStatus = async () => {
+      try {
+        const r = await fetch('/api/machine/status');
+        const data = await r.json();
+        if (!cancelled) setMachineOnline(data.status === 'online');
+      } catch {
+        if (!cancelled) setMachineOnline(false);
+      }
+    };
+    checkMachineStatus();
+    const interval = setInterval(checkMachineStatus, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const refreshIngredients = async () => {
@@ -68,6 +89,8 @@ export default function HomePage() {
 
   const goDash = () => { setScreen('dashboard'); setApiError(null); setDiagnosa(null); setPenjelasanGagal(null); };
   const goIngredients = () => setScreen('ingredients');
+  const goHelp = () => setScreen('help');
+  const logout = () => signOut({ callbackUrl: '/login' });
 
   const startForm = () => {
     setForm({ ...DEFAULT_FORM, bahan: getDefaultBahan(userAvailability, ingredients) });
@@ -185,12 +208,14 @@ export default function HomePage() {
   if (screen === 'dashboard') return (
     <DashboardScreen
       riwayat={riwayat}
-      fishSpeciesId={fishSpeciesId}
+      machineOnline={machineOnline}
       renamingId={renamingId}
       renameValue={renameValue}
       deletingId={deletingId}
       onStart={startForm}
       onGoIngredients={goIngredients}
+      onGoHelp={goHelp}
+      onLogout={logout}
       onOpenDetail={openDetail}
       onStartRename={startRename}
       onRenameInput={setRenameValue}
@@ -207,7 +232,8 @@ export default function HomePage() {
       form={form} step={step} ingredients={ingredients}
       computing={computing} apiError={apiError} diagnosa={diagnosa} penjelasanGagal={penjelasanGagal}
       openBahan={openBahan} openBahanDetails={openBahanDetails}
-      onGoDash={goDash} onPrevStep={prevStep} onNextStep={nextStep}
+      onGoDash={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout}
+      onPrevStep={prevStep} onNextStep={nextStep}
       onField={setField} onChoice={setChoice}
       onBahanField={setBahanField}
       onSelectIngredient={selectIngredient}
@@ -219,7 +245,7 @@ export default function HomePage() {
   );
 
   if (screen === 'result' && active) return (
-    <ResultScreen entry={active} onBack={goDash} />
+    <ResultScreen entry={active} onBack={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout} />
   );
 
   if (screen === 'ingredients') return (
@@ -228,12 +254,19 @@ export default function HomePage() {
       userAvailability={userAvailability}
       onBack={goDash}
       onSaved={refreshAll}
+      onStartForm={startForm}
+      onGoHelp={goHelp}
+      onLogout={logout}
     />
+  );
+
+  if (screen === 'help') return (
+    <HelpScreen onBack={goDash} onGoIngredients={goIngredients} onStartForm={startForm} onGoHelp={goHelp} onLogout={logout} />
   );
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <button onClick={goDash} style={{ color: '#1A8A5E', fontWeight: 800, cursor: 'pointer', fontSize: 14 }}>← Beranda</button>
+      <button onClick={goDash} style={{ color: '#2563EB', fontWeight: 800, cursor: 'pointer', fontSize: 14 }}>← Beranda</button>
     </div>
   );
 }

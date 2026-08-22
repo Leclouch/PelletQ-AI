@@ -1,17 +1,24 @@
 import Image from 'next/image';
 import AppShell from '@/components/ui/AppShell';
+import BottomNav from '@/components/ui/BottomNav';
+import Sidebar from '@/components/ui/Sidebar';
 import { RiwayatEntry } from '@/lib/types';
+import { PASAR_PRICE } from '@/lib/constants';
 import { rp, todayStr } from '@/lib/helpers';
+
+const historyChipStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: '#F6F3EA', color: '#6B7A6F' };
 import logo from '../../../assets/Logo_PelletQ-AI.png';
 
 interface DashboardScreenProps {
   riwayat: RiwayatEntry[];
-  fishSpeciesId: string;
+  machineOnline: boolean;
   renamingId: string | null;
   renameValue: string;
   deletingId: string | null;
   onStart: () => void;
   onGoIngredients: () => void;
+  onGoHelp: () => void;
+  onLogout: () => void;
   onOpenDetail: (id: string) => void;
   onStartRename: (id: string) => void;
   onRenameInput: (v: string) => void;
@@ -23,37 +30,60 @@ interface DashboardScreenProps {
 }
 
 export default function DashboardScreen({
-  riwayat, fishSpeciesId, renamingId, renameValue, deletingId,
-  onStart, onGoIngredients, onOpenDetail,
+  riwayat, machineOnline, renamingId, renameValue, deletingId,
+  onStart, onGoIngredients, onGoHelp, onLogout, onOpenDetail,
   onStartRename, onRenameInput, onSaveRename, onCancelRename,
   onStartDelete, onConfirmDelete, onCancelDelete,
 }: DashboardScreenProps) {
+  // Total hemat dibanding beli pasaran — sama seperti "Hemat vs pasar" di
+  // layar hasil per formulasi (lihat ResultScreen), diakumulasi lintas
+  // seluruh riwayat.
+  let totalHemat = 0;
+  let totalPasar = 0;
+  for (const r of riwayat) {
+    const pasar = PASAR_PRICE[r.fase] ?? 12500;
+    totalHemat += Math.max(0, pasar - r.biayaPerKg) * r.targetKg;
+    totalPasar += pasar * r.targetKg;
+  }
+  const hematPct = totalPasar > 0 ? (totalHemat / totalPasar) * 100 : 0;
+
   return (
-    <AppShell>
+    <AppShell
+      sidebar={
+        <Sidebar
+          active="dashboard"
+          onGoDash={() => {}}
+          onGoIngredients={onGoIngredients}
+          onStartForm={onStart}
+          onGoHelp={onGoHelp}
+          onLogout={onLogout}
+        />
+      }
+    >
       {/* Header */}
-      <div style={{ background: 'rgba(246,242,233,.92)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 5, borderBottom: '1px solid #EDE7D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px' }}>
+      <div style={{ background: 'rgba(255,255,255,.92)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 5, borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #E7E1D2' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Image src={logo} alt="PelletQ-AI logo" width={40} height={40} priority unoptimized />
           </div>
           <span style={{
             fontSize: 18,
             fontWeight: 800,
             letterSpacing: '-.02em',
-            background: 'linear-gradient(135deg, #7700FF 0%, #1A8A5E 100%)',
+            background: 'linear-gradient(135deg, #7700FF 0%, #2563EB 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>PelletQ-AI</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 999, background: fishSpeciesId ? '#E5F2EA' : '#FBE9E5', border: `1px solid ${fishSpeciesId ? '#BFE2CD' : '#EDC4BB'}` }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: fishSpeciesId ? '#1FA463' : '#B9433A', boxShadow: fishSpeciesId ? '0 0 0 3px rgba(31,164,99,.18)' : '0 0 0 3px rgba(185,67,58,.16)', display: 'block' }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: fishSpeciesId ? '#1B7B4D' : '#9E3B30' }}>
-            {fishSpeciesId ? 'Sistem Aktif' : 'Menghubungkan…'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 999, background: machineOnline ? '#E1EBFB' : '#FBE9E5', border: `1px solid ${machineOnline ? '#BFD6F5' : '#EDC4BB'}` }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: machineOnline ? '#2563EB' : '#B9433A', boxShadow: machineOnline ? '0 0 0 3px rgba(37,99,235,.18)' : '0 0 0 3px rgba(185,67,58,.16)', display: 'block' }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: machineOnline ? '#1D4ED8' : '#9E3B30' }}>
+            {machineOnline ? 'Sistem Aktif' : 'Mesin Offline'}
           </span>
         </div>
       </div>
 
-      <div style={{ padding: '20px 18px 120px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ padding: '20px 18px 140px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         {/* Greeting */}
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#7C8A82' }}>Selamat datang kembali</div>
@@ -64,25 +94,36 @@ export default function DashboardScreen({
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: '15px 16px', boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
-            <div style={{ fontSize: 30, fontWeight: 800, color: '#11623F', lineHeight: 1, letterSpacing: '-.03em' }}>{riwayat.length}</div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: '#1D4ED8', lineHeight: 1, letterSpacing: '-.03em' }}>{riwayat.length}</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#7C8A82', marginTop: 7 }}>Formulasi dibuat</div>
           </div>
-          <div style={{ background: '#1A8A5E', borderRadius: 18, padding: '15px 16px', color: '#fff', boxShadow: '0 6px 16px rgba(26,138,94,.22)' }}>
+          <div style={{ background: '#2563EB', borderRadius: 18, padding: '15px 16px', color: '#fff', boxShadow: '0 6px 16px rgba(37,99,235,.22)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, textTransform: 'uppercase', letterSpacing: '.06em' }}>Terakhir</div>
             <div style={{ fontSize: 15, fontWeight: 800, marginTop: 5, lineHeight: 1.2 }}>{riwayat[0]?.nama ?? '—'}</div>
             <div style={{ fontSize: 11.5, fontWeight: 600, opacity: .85, marginTop: 3 }}>{riwayat[0]?.tanggal ?? ''}</div>
           </div>
         </div>
 
-        {/* CTAs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', padding: 18, borderRadius: 18, background: 'linear-gradient(135deg,#1A8A5E 0%,#11623F 100%)', color: '#fff', fontSize: 16.5, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', boxShadow: '0 8px 20px rgba(17,98,63,.26)' }}>
+        {/* Total hemat vs harga pasar — akumulasi seluruh riwayat */}
+        <div style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 18, padding: '15px 16px', boxShadow: '0 1px 2px rgba(28,46,39,.04)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#7C8A82' }}>Total Hemat vs Harga Pasar</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#1D4ED8', letterSpacing: '-.03em', marginTop: 6, lineHeight: 1 }}>{rp(totalHemat)}</div>
+          {riwayat.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#7C8A82', marginTop: 6 }}>
+              Rata-rata {hematPct.toFixed(0)}% lebih murah dibanding beli pasaran
+            </div>
+          )}
+        </div>
+
+        {/* CTAs — hidden on desktop sidebar layout, where the sidebar already covers these actions */}
+        <div className="dashboard-ctas" style={{ flexDirection: 'column', gap: 10 }}>
+          <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', padding: 18, borderRadius: 18, background: 'linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)', color: '#fff', fontSize: 16.5, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer', boxShadow: '0 8px 20px rgba(29,78,216,.26)' }}>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,.22)' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
             </span>
             Buat Formulasi Baru
           </button>
-          <button onClick={onGoIngredients} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', padding: '15px 18px', borderRadius: 18, background: '#fff', border: '1.5px solid #1A8A5E', color: '#1A8A5E', fontSize: 15, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer' }}>
+          <button onClick={onGoIngredients} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', padding: '15px 18px', borderRadius: 18, background: '#fff', border: '1.5px solid #2563EB', color: '#2563EB', fontSize: 15, fontWeight: 800, letterSpacing: '-.01em', cursor: 'pointer' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
             Kelola Bahan
           </button>
@@ -112,19 +153,24 @@ export default function DashboardScreen({
                   </div>
                 ) : renamingId === r.id ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input value={renameValue} onChange={e => onRenameInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') onSaveRename(); if (e.key === 'Escape') onCancelRename(); }} autoFocus style={{ flex: 1, fontSize: 14.5, fontWeight: 700, padding: '8px 10px', border: '1.5px solid #1A8A5E', borderRadius: 10, outline: 'none' }} />
-                    <button onClick={onSaveRename} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#1A8A5E', borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>Simpan</button>
+                    <input value={renameValue} onChange={e => onRenameInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') onSaveRename(); if (e.key === 'Escape') onCancelRename(); }} autoFocus style={{ flex: 1, fontSize: 14.5, fontWeight: 700, padding: '8px 10px', border: '1.5px solid #2563EB', borderRadius: 10, outline: 'none' }} />
+                    <button onClick={onSaveRename} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#2563EB', borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>Simpan</button>
                     <button onClick={onCancelRename} style={{ fontSize: 12, fontWeight: 700, color: '#46554E', background: '#F0EDE5', borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>✕</button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button onClick={() => onOpenDetail(r.id)} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <button onClick={() => onOpenDetail(r.id)} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 13, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.nama}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>{r.tanggal} · {r.targetKg} kg</div>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 7 }}>
+                          <span style={{ fontSize: 14.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{r.nama}</span>
+                          <span style={historyChipStyle}>P {r.result.formulasi.estimasiNutrisi.proteinPct.toFixed(1)}%</span>
+                          <span style={historyChipStyle}>L {r.result.formulasi.estimasiNutrisi.lemakPct.toFixed(1)}%</span>
+                          <span style={historyChipStyle}>{r.result.formulasi.ingredients.length} bahan</span>
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', marginTop: 4 }}>{r.tanggal} · {r.fase} · {r.targetKg} kg</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: r.sniOk ? '#E2F1E7' : '#FBF1D9', color: r.sniOk ? '#15724B' : '#9A6A12' }}>{r.sniOk ? 'SNI ✓' : 'Cek SNI'}</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: r.sniOk ? '#E1EBFB' : '#FBF1D9', color: r.sniOk ? '#1D4ED8' : '#9A6A12' }}>{r.sniOk ? 'SNI ✓' : 'Cek SNI'}</span>
                         <span style={{ fontSize: 12, fontWeight: 700, color: '#46554E' }}>{rp(r.biayaPerKg)}<span style={{ fontSize: 10, fontWeight: 600, color: '#9AA69E' }}>/kg</span></span>
                       </div>
                     </button>
@@ -141,6 +187,15 @@ export default function DashboardScreen({
           </div>
         </div>
       </div>
+
+      <BottomNav
+        active="dashboard"
+        onGoDash={() => {}}
+        onGoIngredients={onGoIngredients}
+        onStartForm={onStart}
+        onGoHelp={onGoHelp}
+        onLogout={onLogout}
+      />
     </AppShell>
   );
 }
