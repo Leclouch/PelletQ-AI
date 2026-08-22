@@ -6,8 +6,20 @@ import StickyHeader from '@/components/ui/StickyHeader';
 import StickyFooter from '@/components/ui/StickyFooter';
 import Sidebar from '@/components/ui/Sidebar';
 import { RiwayatEntry } from '@/lib/types';
-import { SEVERITY_STYLE, PASAR_PRICE } from '@/lib/constants';
+import { SEVERITY_STYLE, PASAR_PRICE, MINYAK_IKAN_NAME, kgToMlMinyakIkan, rpPerKgToRpPerMlMinyakIkan } from '@/lib/constants';
 import { rp } from '@/lib/helpers';
+
+// Minyak Ikan ditampilkan dalam ml (bukan kg) — murni tampilan, lihat
+// MINYAK_IKAN_DENSITY_KG_PER_L di lib/constants untuk asumsi densitasnya.
+// Neraca massa/LP solver/DB/protokol ESP32 tetap kg apa adanya.
+function fmtJumlah(name: string, jumlahKg: number): string {
+  if (name === MINYAK_IKAN_NAME) return `${Math.round(kgToMlMinyakIkan(jumlahKg))} ml`;
+  return `${jumlahKg.toFixed(2)} kg`;
+}
+function fmtHargaPerUnit(name: string, hargaPerKg: number): string {
+  if (name === MINYAK_IKAN_NAME) return `${rp(rpPerKgToRpPerMlMinyakIkan(hargaPerKg))}/ml`;
+  return `${rp(hargaPerKg)}/kg`;
+}
 
 interface ResultScreenProps {
   entry: RiwayatEntry;
@@ -93,7 +105,7 @@ export default function ResultScreen({ entry, onBack, onGoIngredients, onStartFo
           <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid #F2EEE2' }}>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{it.name}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>{it.jumlahKg.toFixed(2)} kg · {rp(it.hargaPerKg)}/kg</div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>{fmtJumlah(it.name, it.jumlahKg)} · {fmtHargaPerUnit(it.name, it.hargaPerKg)}</div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#1D4ED8' }}>{it.persentase.toFixed(1)}%</div>
@@ -128,7 +140,7 @@ export default function ResultScreen({ entry, onBack, onGoIngredients, onStartFo
             <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F2EEE2' }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{it.name}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: '#1D4ED8' }}>{it.jumlahKg.toFixed(2).replace('.', ',')} kg</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: '#1D4ED8' }}>{fmtJumlah(it.name, it.jumlahKg).replace('.', ',')}</span>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9AA69E', minWidth: 42, textAlign: 'right' }}>{it.persentase.toFixed(1)}%</span>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { solveFormulation, diagnoseInfeasibility, type LPIngredientInput } from "@/lib/lp-solver";
 import { validateSni } from "@/lib/sni-validator";
 import { computeMachineParams, type RuleParams } from "@/lib/rule-engine";
-import { BATCH_KG, PHASE_DIAMETER_MM } from "@/lib/constants";
+import { BATCH_KG, PHASE_DIAMETER_MM, MANDATORY_INGREDIENT_NAMES } from "@/lib/constants";
 import {
   explainFormulation,
   explainInfeasible,
@@ -68,6 +68,19 @@ export async function POST(req: NextRequest) {
     if (missingIngredient) {
       return NextResponse.json(
         { error: `Bahan ${missingIngredient.ingredientId} tidak ditemukan di database.` },
+        { status: 400 }
+      );
+    }
+
+    // Bahan wajib — validasi ulang di server (client sudah cek juga di
+    // page.tsx nextStep()) supaya tidak bisa dilewati lewat panggilan API
+    // langsung.
+    const missingMandatory = MANDATORY_INGREDIENT_NAMES.filter(
+      (name) => !dbIngredients.some((d) => d.name === name)
+    );
+    if (missingMandatory.length > 0) {
+      return NextResponse.json(
+        { error: `Bahan wajib belum dipilih: ${missingMandatory.join(", ")}.` },
         { status: 400 }
       );
     }

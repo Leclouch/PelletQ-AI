@@ -75,19 +75,26 @@ export default function FormScreen({
       <div style={{ flex: 1, padding: '18px 18px 120px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {step === 1 && <Step1Fish form={form} onField={onField} onChoice={onChoice} />}
         {step === 2 && (
-          <Step3Ingredients
-            form={form}
-            ingredients={ingredients}
-            openBahan={openBahan}
-            openBahanDetails={openBahanDetails}
-            onAddBahan={onAddBahan}
-            onRemoveBahan={onRemoveBahan}
-            onBahanField={onBahanField}
-            onSelectIngredient={onSelectIngredient}
-            onToggleMenu={onToggleMenu}
-            onToggleDetail={onToggleDetail}
-            onCloseMenus={onCloseMenus}
-          />
+          <>
+            <Step3Ingredients
+              form={form}
+              ingredients={ingredients}
+              openBahan={openBahan}
+              openBahanDetails={openBahanDetails}
+              onAddBahan={onAddBahan}
+              onRemoveBahan={onRemoveBahan}
+              onBahanField={onBahanField}
+              onSelectIngredient={onSelectIngredient}
+              onToggleMenu={onToggleMenu}
+              onToggleDetail={onToggleDetail}
+              onCloseMenus={onCloseMenus}
+            />
+            {apiError && (
+              <div style={{ background: '#FBE7E1', border: '1px solid #E2A593', borderRadius: 14, padding: '13px 14px', fontSize: 13, fontWeight: 600, color: '#8F3520', lineHeight: 1.4 }}>
+                ⛔ {apiError}
+              </div>
+            )}
+          </>
         )}
         {step === 3 && <Step3Summary form={form} onField={onField} apiError={apiError} diagnosa={diagnosa} penjelasanGagal={penjelasanGagal} />}
       </div>
