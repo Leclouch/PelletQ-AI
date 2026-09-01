@@ -1,5 +1,6 @@
 import IngredientDropdown from '@/components/ui/IngredientDropdown';
 import { FormData, IngredientOption } from '@/lib/types';
+import { MINYAK_IKAN_NAME } from '@/lib/constants';
 
 interface Step3Props {
   form: FormData;
@@ -29,6 +30,9 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
       {form.bahan.map((b, i) => {
         const detailOpen = openBahanDetails[i] ?? !!(b.stok || b.harga);
         const canRemove = form.bahan.length > 3;
+        const minyak = b.nama === MINYAK_IKAN_NAME;
+        const stokUnit = minyak ? 'ml' : 'kg';
+        const hargaUnit = minyak ? '/ml' : '/kg';
         return (
           <div key={i} style={{ background: '#fff', border: '1px solid #ECE6D8', borderRadius: 16, padding: 13, boxShadow: '0 1px 2px rgba(28,46,39,.04)', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -51,7 +55,7 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
 
             {!detailOpen && b.nama && (
               <div style={{ fontSize: 12, fontWeight: 600, color: '#9AA69E', padding: '0 2px' }}>
-                {[b.stok && `${b.stok} kg`, b.harga && `Rp ${Number(b.harga).toLocaleString('id')}/kg`].filter(Boolean).join(' · ') || 'Belum diisi'}
+                {[b.stok && `${b.stok} ${stokUnit}`, b.harga && `Rp ${Number(b.harga).toLocaleString('id')}${hargaUnit}`].filter(Boolean).join(' · ') || 'Belum diisi'}
               </div>
             )}
 
@@ -59,12 +63,12 @@ export default function Step3Ingredients({ form, ingredients, openBahan, openBah
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <input value={b.stok} onChange={e => onBahanField(i, 'stok', e.target.value)} inputMode="numeric" placeholder="Stok" style={{ width: '100%', padding: '10px 36px 10px 11px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
-                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>kg</span>
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>{stokUnit}</span>
                 </div>
                 <div style={{ flex: 1.3, position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#9AA69E' }}>Rp</span>
                   <input value={b.harga} onChange={e => onBahanField(i, 'harga', e.target.value)} inputMode="numeric" placeholder="Harga" style={{ width: '100%', padding: '10px 32px 10px 32px', border: '1.5px solid #E2DDCE', borderRadius: 11, fontSize: 14, color: '#1C2E27', background: '#FCFBF7', fontWeight: 700 }} />
-                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>/kg</span>
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>{hargaUnit}</span>
                 </div>
               </div>
             )}

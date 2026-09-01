@@ -247,14 +247,14 @@ async function main() {
   // ============================================================
   // 5. ADMIN USER (kredensial login)
   // Username & password diambil dari env supaya produksi tak memakai
-  // nilai hardcode. Fallback dev dipakai kalau env kosong (+ warning).
+  // nilai hardcode. Tidak ada fallback: seed gagal bila SEED_ADMIN_PASSWORD kosong.
   // ============================================================
   const adminUsername = process.env.SEED_ADMIN_USERNAME || "pelletq";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "admin321";
-  if (!process.env.SEED_ADMIN_PASSWORD) {
-    console.warn(
-      "⚠ SEED_ADMIN_PASSWORD belum diset — memakai password default 'admin321'. " +
-        "JANGAN dipakai di produksi; set SEED_ADMIN_PASSWORD di .env."
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD belum diset. Isi di .env dengan password kuat " +
+        "sebelum menjalankan seed — tidak ada password default."
     );
   }
   const adminPasswordHash = await bcrypt.hash(adminPassword, 10);

@@ -11,8 +11,10 @@ BASE="http://localhost:3000"
 URL="$BASE/api/formulation"
 COOKIES="$(dirname "$0")/cookies.txt"
 
-USERNAME="pelletq"
-PASSWORD="admin321"
+# Kredensial diambil dari environment supaya tidak ada password di repo:
+#   SEED_ADMIN_USERNAME=... SEED_ADMIN_PASSWORD=... ./test/test-formulation.sh
+USERNAME="${SEED_ADMIN_USERNAME:?set SEED_ADMIN_USERNAME dulu}"
+PASSWORD="${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD dulu}"
 
 # fishSpeciesId & ingredientId diambil dari database (seed). Update jika re-seed.
 read -r -d '' BODY <<'JSON' || true

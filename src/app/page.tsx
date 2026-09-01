@@ -8,7 +8,11 @@ import ResultScreen from '@/components/screens/ResultScreen';
 import IngredientsScreen from '@/components/screens/IngredientsScreen';
 import HelpScreen from '@/components/screens/HelpScreen';
 import { Screen, FormData, RiwayatEntry, IngredientOption, UserIngredientAvailability, ApiResult, Diagnosa } from '@/lib/types';
-import { DEFAULT_FORM, PHASE_MAP, MANDATORY_INGREDIENT_NAMES } from '@/lib/constants';
+import {
+  DEFAULT_FORM, PHASE_MAP, MANDATORY_INGREDIENT_NAMES,
+  MINYAK_IKAN_NAME, kgToMlMinyakIkan, mlToKgMinyakIkan,
+  rpPerKgToRpPerMlMinyakIkan, rpPerMlToRpPerKgMinyakIkan,
+} from '@/lib/constants';
 import { todayStr, getDefaultBahan } from '@/lib/helpers';
 
 export default function HomePage() {
@@ -139,11 +143,20 @@ export default function HomePage() {
       jumlahIkanEkor: parseInt(form.jumlah) || 1000,
       bobotRataRataGram: form.bobot ? parseFloat(form.bobot) : null,
       targetProduksiKgBatch: parseFloat(form.targetProduksi) || 25,
-      bahanBaku: validBahan.map(b => ({
-        ingredientId: b.ingredientId,
-        stokKg: parseFloat(b.stok) || 999,
-        hargaPerKg: parseFloat(b.harga) || (ingredients.find(i => i.id === b.ingredientId)?.hargaStandarPerKg ?? 10000),
-      })),
+      // Minyak Ikan dimasukkan dalam ml di form (lihat Step3Ingredients) —
+      // dikonversi balik ke kg di sini, sebelum dikirim ke solver (yang
+      // seluruhnya bekerja dalam kg).
+      bahanBaku: validBahan.map(b => {
+        const minyak = b.nama === MINYAK_IKAN_NAME;
+        const stokParsed = parseFloat(b.stok);
+        const stokKg = Number.isFinite(stokParsed) ? (minyak ? mlToKgMinyakIkan(stokParsed) : stokParsed) : 999;
+        const hargaParsed = parseFloat(b.harga);
+        const hargaFallbackKg = ingredients.find(i => i.id === b.ingredientId)?.hargaStandarPerKg ?? 10000;
+        const hargaPerKg = hargaParsed > 0
+          ? (minyak ? rpPerMlToRpPerKgMinyakIkan(hargaParsed) : hargaParsed)
+          : hargaFallbackKg;
+        return { ingredientId: b.ingredientId, stokKg, hargaPerKg };
+      }),
     };
 
     try {
@@ -200,11 +213,16 @@ export default function HomePage() {
   const selectIngredient = (idx: number, id: string, name: string) => {
     const ing = ingredients.find(i => i.id === id);
     const saved = userAvailability.find(a => a.ingredientId === id);
+    // stokKg/hargaPerKg dari DB selalu kg — Minyak Ikan ditampilkan dalam ml
+    // di form ini (lihat Step3Ingredients), jadi dikonversi saat prefill.
+    const minyak = name === MINYAK_IKAN_NAME;
+    const fmtHarga = (rpPerKg: number) => String(minyak ? Math.round(rpPerKgToRpPerMlMinyakIkan(rpPerKg)) : rpPerKg);
+    const fmtStok = (kg: number) => String(minyak ? Math.round(kgToMlMinyakIkan(kg)) : kg);
     setForm(f => ({
       ...f, bahan: f.bahan.map((b, j) => j === idx ? {
         ...b, ingredientId: id, nama: name,
-        harga: saved ? String(saved.hargaPerKg) : (b.harga || String(ing?.hargaStandarPerKg ?? '')),
-        stok: saved ? String(saved.stokKg) : b.stok,
+        harga: saved ? fmtHarga(saved.hargaPerKg) : (b.harga || (ing ? fmtHarga(ing.hargaStandarPerKg) : '')),
+        stok: saved ? fmtStok(saved.stokKg) : b.stok,
       } : b),
     }));
     setOpenBahan(null);

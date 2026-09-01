@@ -1,5 +1,5 @@
 import { BahanItem, IngredientOption, UserIngredientAvailability } from './types';
-import { EMPTY_BAHAN } from './constants';
+import { EMPTY_BAHAN, MINYAK_IKAN_NAME, kgToMlMinyakIkan, rpPerKgToRpPerMlMinyakIkan } from './constants';
 
 export const rp = (n: number) => 'Rp ' + Math.round(n).toLocaleString('id-ID');
 export const todayStr = () => new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -34,11 +34,15 @@ export function getDefaultBahan(
   }
   const rows = userAvailability.slice(0, 8).map((avail): BahanItem => {
     const ing = ingredients.find(i => i.id === avail.ingredientId);
+    // stokKg/hargaPerKg tersimpan dalam kg apa adanya — Minyak Ikan
+    // ditampilkan dalam ml di form (lihat Step3Ingredients), jadi dikonversi
+    // di sini juga supaya prefill-nya konsisten dengan yang dilihat user.
+    const minyak = ing?.name === MINYAK_IKAN_NAME;
     return {
       ingredientId: avail.ingredientId,
       nama: ing?.name ?? '',
-      stok: String(avail.stokKg),
-      harga: String(avail.hargaPerKg),
+      stok: minyak ? String(Math.round(kgToMlMinyakIkan(avail.stokKg))) : String(avail.stokKg),
+      harga: minyak ? String(Math.round(rpPerKgToRpPerMlMinyakIkan(avail.hargaPerKg))) : String(avail.hargaPerKg),
     };
   });
   // Ensure at least 3 rows

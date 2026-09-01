@@ -1206,13 +1206,13 @@ At the top of `.env.example`, before the existing `# Database` section, add:
 ```
 # ============================================================================
 # CHECKLIST SEBELUM DEPLOY KE INTERNET (jangan skip salah satu):
-#   1. DATABASE_URL: ganti password Postgres dev ("pelletq_dev_password")
+#   1. DATABASE_URL: ganti password Postgres dev
 #      dengan kredensial baru — update juga POSTGRES_PASSWORD di
 #      docker-compose.yml.
 #   2. AUTH_SECRET: generate baru, JANGAN pakai punya dev.
 #      `openssl rand -base64 32`
 #   3. SEED_ADMIN_PASSWORD: isi dengan password kuat sebelum
-#      `pnpm prisma db seed` di server produksi — default dev ("admin321")
+#      `pnpm prisma db seed` di server produksi — default dev ("<password-dev-lama>")
 #      TIDAK boleh dipakai di produksi.
 #   4. MQTT_USERNAME / MQTT_PASSWORD: generate baru via `mosquitto_passwd`
 #      (lihat firmware/pelletq_esp32/README.md), bukan kredensial dev.

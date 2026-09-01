@@ -89,10 +89,10 @@ Then edit `.env` and set, at minimum:
 
 | Variable | What to put |
 |---|---|
-| `POSTGRES_PASSWORD` | A new strong password (not the `pelletq_dev_password` default) |
+| `POSTGRES_PASSWORD` | A new strong password — required, Compose refuses to start without it |
 | `DATABASE_URL` | Must match `POSTGRES_PASSWORD` above — same password in both |
 | `AUTH_SECRET` | Generate with `openssl rand -base64 32`. Never reuse the dev one. |
-| `SEED_ADMIN_PASSWORD` | A strong password for the initial admin login (the dev default `admin321` must not be used in production) |
+| `SEED_ADMIN_PASSWORD` | A strong password for the initial admin login — required, the seed refuses to run without it |
 | `MQTT_USERNAME` / `MQTT_PASSWORD` | New credentials, not your dev/bench ones (you'll create the actual password file in step 3) |
 | `TUNNEL_TOKEN` | From the Cloudflare Tunnel you create in step 4 — leave blank until then |
 
@@ -186,9 +186,9 @@ reconnects to Cloudflare automatically.
 
 ## Pre-launch security checklist
 
-- [ ] `SEED_ADMIN_PASSWORD` changed from `admin321`
+- [ ] `SEED_ADMIN_PASSWORD` set to a strong value
 - [ ] `AUTH_SECRET` is new, secret, and not committed anywhere
-- [ ] `POSTGRES_PASSWORD` changed from `pelletq_dev_password`
+- [ ] `POSTGRES_PASSWORD` set to a strong value
 - [ ] `MQTT_USERNAME`/`MQTT_PASSWORD` changed from dev/bench credentials
 - [ ] `TUNNEL_TOKEN` is secret and not committed anywhere
 - [ ] No ports opened manually in any firewall or router — `cloudflared`

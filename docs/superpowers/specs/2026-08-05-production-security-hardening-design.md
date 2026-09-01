@@ -208,9 +208,9 @@ about dev defaults. Extend it with `MQTT_USERNAME`/`MQTT_PASSWORD`, and add
 a short **deploy checklist** section (as a comment block or short doc) covering:
 - Generate a real `AUTH_SECRET` (`openssl rand -base64 32`), don't reuse dev's.
 - Set `SEED_ADMIN_PASSWORD` before running the seed in prod — don't ship
-  with the `admin321` dev default.
+  with the `<password-dev-lama>` dev default.
 - Generate real Postgres credentials — don't ship
-  `pelletq_dev_password`.
+  password dev lama.
 - Generate the Mosquitto `password_file` credentials, put them in
   `MQTT_USERNAME`/`MQTT_PASSWORD`.
 - Obtain the Let's Encrypt cert for the MQTT subdomain before first boot of

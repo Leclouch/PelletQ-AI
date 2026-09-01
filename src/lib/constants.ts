@@ -18,7 +18,9 @@ export const MANDATORY_INGREDIENT_NAMES = ['Minyak Ikan', 'Tapioka'];
 export const MINYAK_IKAN_NAME = 'Minyak Ikan';
 export const MINYAK_IKAN_DENSITY_KG_PER_L = 0.92;
 export const kgToMlMinyakIkan = (kg: number) => (kg * 1000) / MINYAK_IKAN_DENSITY_KG_PER_L;
+export const mlToKgMinyakIkan = (ml: number) => (ml * MINYAK_IKAN_DENSITY_KG_PER_L) / 1000;
 export const rpPerKgToRpPerMlMinyakIkan = (rpPerKg: number) => rpPerKg * (MINYAK_IKAN_DENSITY_KG_PER_L / 1000);
+export const rpPerMlToRpPerKgMinyakIkan = (rpPerMl: number) => rpPerMl / (MINYAK_IKAN_DENSITY_KG_PER_L / 1000);
 export const SEVERITY_STYLE: Record<string, { bg: string; border: string; text: string; icon: string }> = {
   INFO:     { bg: '#E9EFF3', border: '#C5D4DE', text: '#3D5566', icon: 'ℹ️' },
   WARNING:  { bg: '#FBF1D9', border: '#EAC97F', text: '#825511', icon: '⚠️' },

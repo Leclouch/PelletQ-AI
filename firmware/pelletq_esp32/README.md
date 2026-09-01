@@ -62,7 +62,7 @@ Gunakan default ESP-IDF certificate bundle untuk memvalidasi sertifikat publik
 Jangan menyalin atau mem-pin sertifikat ke `ca_cert.h`.
 
 **Endpoint ini sudah live dan terverifikasi.** Cloudflare Tunnel (`cloudflared`,
-lihat `docker-compose.yml`) meneruskan `wss://mqtt.pelletqai.com` ke listener
+lihat `docker-compose.yml`) meneruskan `wss://mqtt.contoh-domain.com` ke listener
 9001 Mosquitto. Pub/sub lewat sertifikat publik Cloudflare (tanpa `--insecure`,
 tanpa CA pinning) dan autentikasi Mosquitto (`password_file`) sudah dites dan
 berhasil. Secara desain, listener 1883 dan WebSocket 9001 dimaksudkan sebagai
@@ -113,7 +113,7 @@ kecuali dibind eksplisit ke `127.0.0.1` atau dibatasi firewall host.
   catat bahwa payload diterima tanpa path aplikasi pada URI.
 - [x] Buat Cloudflare Tunnel atau proxy WebSocket yang meneruskan
   `wss://mqtt.<domain>` ke listener 9001, lalu verifikasi sertifikat publik
-  dan autentikasi Mosquitto. Dikonfirmasi: `wss://mqtt.pelletqai.com:443`
+  dan autentikasi Mosquitto. Dikonfirmasi: `wss://mqtt.contoh-domain.com:443`
   pub/sub berhasil lewat sertifikat publik Cloudflare (tanpa `--insecure`,
   tanpa CA pinning), dengan autentikasi Mosquitto (`password_file`) aktif.
 - [ ] Flash `firmware/pelletq_esp32` ke hardware ESP32 nyata, konfirmasi koneksi,

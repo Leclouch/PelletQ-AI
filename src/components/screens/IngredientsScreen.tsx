@@ -6,8 +6,23 @@ import StickyHeader from '@/components/ui/StickyHeader';
 import BottomNav from '@/components/ui/BottomNav';
 import Sidebar from '@/components/ui/Sidebar';
 import { IngredientOption, UserIngredientAvailability } from '@/lib/types';
-import { KARAKTER_DISPLAY, KARAKTER_OPTIONS } from '@/lib/constants';
+import {
+  KARAKTER_DISPLAY, KARAKTER_OPTIONS,
+  MINYAK_IKAN_NAME, kgToMlMinyakIkan, mlToKgMinyakIkan,
+  rpPerKgToRpPerMlMinyakIkan, rpPerMlToRpPerKgMinyakIkan,
+} from '@/lib/constants';
 import { rp } from '@/lib/helpers';
+
+// Minyak Ikan dikelola dalam ml di sini juga (bukan kg) — sama seperti di
+// layar hasil (ResultScreen) & TFT ESP32, murni tampilan/input; stokKg &
+// hargaPerKg tetap dikirim ke API dalam kg apa adanya (dikonversi di
+// startEditAvail/saveAvail). Field "Harga Standar" pada form katalog
+// (tambah/edit bahan) sengaja TIDAK dikonversi — form itu generik untuk
+// semua bahan (termasuk saat menambah bahan baru yang namanya belum tentu
+// diisi), jadi tetap kg di sana.
+function isMinyakIkan(name: string) {
+  return name === MINYAK_IKAN_NAME;
+}
 
 interface IngredientsScreenProps {
   ingredients: IngredientOption[];
@@ -99,11 +114,20 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
 
   const startEditAvail = (ing: IngredientOption) => {
     const existing = getAvail(ing.id);
+    const minyak = isMinyakIkan(ing.name);
     setAvailForms(f => ({
       ...f,
       [ing.id]: existing
-        ? { stokKg: String(existing.stokKg), hargaPerKg: String(existing.hargaPerKg) }
-        : { ...EMPTY_AVAIL, hargaPerKg: String(ing.hargaStandarPerKg) },
+        ? {
+            stokKg: minyak ? String(Math.round(kgToMlMinyakIkan(existing.stokKg))) : String(existing.stokKg),
+            hargaPerKg: minyak ? String(Math.round(rpPerKgToRpPerMlMinyakIkan(existing.hargaPerKg))) : String(existing.hargaPerKg),
+          }
+        : {
+            ...EMPTY_AVAIL,
+            hargaPerKg: minyak
+              ? String(Math.round(rpPerKgToRpPerMlMinyakIkan(ing.hargaStandarPerKg)))
+              : String(ing.hargaStandarPerKg),
+          },
     }));
     setExpandedAvail(expandedAvail === ing.id ? null : ing.id);
     setExpandedCatalog(null);
@@ -127,11 +151,14 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
   const saveAvail = async (ingredientId: string) => {
     const f = availForms[ingredientId];
     if (!f) return;
+    const minyak = isMinyakIkan(ingredients.find(i => i.id === ingredientId)?.name ?? '');
+    const stokKg = minyak ? mlToKgMinyakIkan(parseFloat(f.stokKg) || 0) : (parseFloat(f.stokKg) || 0);
+    const hargaPerKg = minyak ? rpPerMlToRpPerKgMinyakIkan(parseFloat(f.hargaPerKg) || 0) : (parseFloat(f.hargaPerKg) || 0);
     setSaving(ingredientId + '-avail'); setError(null);
     try {
       const res = await fetch('/api/user-ingredients', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredientId, stokKg: parseFloat(f.stokKg) || 0, hargaPerKg: parseFloat(f.hargaPerKg) || 0, kondisi: 'KERING', bentuk: null }),
+        body: JSON.stringify({ ingredientId, stokKg, hargaPerKg, kondisi: 'KERING', bentuk: null }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       setExpandedAvail(null); onSaved();
@@ -237,7 +264,11 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                       <span style={{ background: '#F0F0E8', borderRadius: 6, padding: '1px 6px', marginRight: 6, fontSize: 11, fontWeight: 700, color: '#6B7A6F' }}>{KARAKTER_DISPLAY[ing.karakterBahan] ?? ing.karakterBahan}</span>
                       P {ing.proteinPct}% · L {ing.lemakPct}% · Serat {ing.seratKasarPct}%
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#B3BCB4', marginTop: 2 }}>Harga standar: {rp(ing.hargaStandarPerKg)}/kg</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#B3BCB4', marginTop: 2 }}>
+                      Harga standar: {isMinyakIkan(ing.name)
+                        ? `${rp(rpPerKgToRpPerMlMinyakIkan(ing.hargaStandarPerKg))}/ml`
+                        : `${rp(ing.hargaStandarPerKg)}/kg`}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button onClick={() => startEditCatalog(ing)} style={{ width: 32, height: 32, borderRadius: 9, background: catOpen ? '#E1EBFB' : '#F6F3EA', border: `1px solid ${catOpen ? '#2563EB' : '#E7E1D2'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
@@ -278,7 +309,9 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#46554E' }}>Ketersediaan saya</div>
                     {avail ? (
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#9AA69E', marginTop: 2 }}>
-                        {avail.stokKg} kg · {rp(avail.hargaPerKg)}/kg
+                        {isMinyakIkan(ing.name)
+                          ? `${Math.round(kgToMlMinyakIkan(avail.stokKg))} ml · ${rp(rpPerKgToRpPerMlMinyakIkan(avail.hargaPerKg))}/ml`
+                          : `${avail.stokKg} kg · ${rp(avail.hargaPerKg)}/kg`}
                       </div>
                     ) : (
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#B3BCB4', marginTop: 2 }}>Belum diatur</div>
@@ -299,12 +332,12 @@ export default function IngredientsScreen({ ingredients, userAvailability, onBac
                     <div style={{ display: 'flex', gap: 8 }}>
                       <div style={{ flex: 1, position: 'relative' }}>
                         <input value={avForm.stokKg} onChange={e => setAvailForms(f => ({ ...f, [ing.id]: { ...f[ing.id], stokKg: e.target.value } }))} inputMode="numeric" placeholder="Stok" style={{ ...fieldStyle, paddingRight: 36 }} />
-                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>kg</span>
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>{isMinyakIkan(ing.name) ? 'ml' : 'kg'}</span>
                       </div>
                       <div style={{ flex: 1.3, position: 'relative' }}>
                         <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 700, color: '#9AA69E' }}>Rp</span>
                         <input value={avForm.hargaPerKg} onChange={e => setAvailForms(f => ({ ...f, [ing.id]: { ...f[ing.id], hargaPerKg: e.target.value } }))} inputMode="numeric" placeholder="Harga" style={{ ...fieldStyle, padding: '10px 32px 10px 30px' }} />
-                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>/kg</span>
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#9AA69E' }}>{isMinyakIkan(ing.name) ? '/ml' : '/kg'}</span>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>

@@ -32,13 +32,13 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
 2. Buat .env di root proyek. Lihat .env.example untuk semua variabel.
 
     ```bash
-    POSTGRES_PASSWORD="pelletq_dev_password"
-    DATABASE_URL="postgresql://pelletq:pelletq_dev_password@localhost:5432/pelletq?schema=public"
+    POSTGRES_PASSWORD="isi-password-database-milikmu"
+    DATABASE_URL="postgresql://pelletq:isi-password-database-milikmu@localhost:5432/pelletq?schema=public"
     MQTT_BROKER_URL="mqtt://localhost:1883"
     AUTH_SECRET="isi-dengan-hasil-openssl-rand-base64-32"
     AUTH_TRUST_HOST="true"
     SEED_ADMIN_USERNAME="pelletq"
-    SEED_ADMIN_PASSWORD="admin321"
+    SEED_ADMIN_PASSWORD="isi-password-kuat-milikmu"
     ```
 
 3. Nyalakan infrastruktur lokal:
@@ -60,7 +60,7 @@ PelletQ-AI adalah satu proyek Next.js (App Router):
     pnpm dev
     ```
 
-Buka http://localhost:3000. Login dev default adalah pelletq / admin321.
+Buka http://localhost:3000. Login memakai SEED_ADMIN_USERNAME / SEED_ADMIN_PASSWORD yang kamu isi di .env.
 
 Karena backend berupa API routes di dalam proyek yang sama, endpoint langsung
 aktif di server yang sama, contohnya:
@@ -118,8 +118,8 @@ yang perlu dikelola atau diperbarui di server.
 
     | Public hostname | Service |
     |---|---|
-    | domain app (nilai APP_DOMAIN, mis. app.pelletqai.com) | http://localhost:3001 |
-    | domain MQTT (nilai MQTT_DOMAIN, mis. mqtt.pelletqai.com) | http://localhost:9001 |
+    | domain app (nilai APP_DOMAIN, mis. app.contoh-domain.com) | http://app:3000 |
+    | domain MQTT (nilai MQTT_DOMAIN, mis. mqtt.contoh-domain.com) | http://mosquitto:9001 |
 
 6. Nyalakan stack:
 
@@ -143,9 +143,9 @@ menerapkan migrasi Prisma.
 
 ### Checklist keamanan
 
-- [ ] SEED_ADMIN_PASSWORD diganti dari admin321.
+- [ ] SEED_ADMIN_PASSWORD diisi password kuat (seed menolak jalan bila kosong).
 - [ ] AUTH_SECRET baru, rahasia, dan tidak di-commit.
-- [ ] POSTGRES_PASSWORD diganti dari pelletq_dev_password.
+- [ ] POSTGRES_PASSWORD diisi password kuat, bukan nilai contoh.
 - [ ] MQTT_USERNAME/MQTT_PASSWORD diganti dari kredensial dev.
 - [ ] TUNNEL_TOKEN rahasia dan tidak di-commit.
 - [ ] Tidak ada port yang dibuka manual di firewall/router — cloudflared

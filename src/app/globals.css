@@ -60,6 +60,29 @@ select {
   }
 }
 
+/* Optional full-bleed background image (e.g. login screen) — the shell
+   container itself stays transparent so only the actual card content sits
+   on top of the image, instead of doubling up as an opaque panel. */
+.app-shell-outer.has-bg-image {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.app-shell-outer.has-bg-image .app-shell-inner {
+  background: transparent;
+}
+
+@media (min-width: 760px) {
+  .app-shell-outer.has-bg-image {
+    background-size: 180% auto;
+    background-position: center center;
+  }
+  .app-shell-outer.has-bg-image .app-shell-inner {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
 .bottom-nav { display: flex; }
 .dashboard-ctas { display: flex; }
 .result-columns { display: flex; flex-direction: column; gap: 16px; }

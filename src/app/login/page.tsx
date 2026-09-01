@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/ui/AppShell";
 import logo from "../../../assets/Logo_PelletQ-AI.png";
+import loginBg from "../../../assets/login-bg.png";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -67,7 +68,7 @@ function LoginForm() {
             justifyContent: "center",
             background: "#fff",
             border: "1px solid #E7E1D2",
-            boxShadow: "0 12px 30px rgba(37,99,235,.18)",
+            boxShadow: "0 12px 30px rgba(37,99,235,.18), 0 4px 16px rgba(0,0,0,.28)",
           }}
         >
           <Image src={logo} alt="Logo PelletQ-AI" width={66} height={66} priority unoptimized />
@@ -83,11 +84,20 @@ function LoginForm() {
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
               WebkitTextFillColor: "transparent",
+              filter: "drop-shadow(0 2px 10px rgba(0,0,0,.35))",
             }}
           >
             PelletQ-AI
           </div>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#9AA69E", marginTop: 7 }}>
+          <div
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#fff",
+              marginTop: 7,
+              textShadow: "0 1px 3px rgba(0,0,0,.8), 0 1px 8px rgba(0,0,0,.6)",
+            }}
+          >
             Formulasi pakan lele otomatis berbasis SNI
           </div>
         </div>
@@ -248,7 +258,15 @@ function LoginForm() {
         </button>
       </form>
 
-      <div style={{ textAlign: "center", fontSize: 11.5, fontWeight: 700, color: "#B3AF9F" }}>
+      <div
+        style={{
+          textAlign: "center",
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: "#fff",
+          textShadow: "0 1px 3px rgba(0,0,0,.8), 0 1px 8px rgba(0,0,0,.6)",
+        }}
+      >
         PelletQ-AI · PKM-PI UGM
       </div>
     </div>
@@ -257,7 +275,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <AppShell>
+    <AppShell background={loginBg.src}>
       <Suspense>
         <LoginForm />
       </Suspense>

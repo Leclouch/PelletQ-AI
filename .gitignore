@@ -111,3 +111,9 @@ yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
 
+
+# pnpm local content-addressable store (accidentally committed once)
+.pnpm-store/
+
+# Foto mitra (memuat wajah + alamat kelompok) — jangan dipublikasikan
+assets/BUKU PEDOMAN MITRA.png

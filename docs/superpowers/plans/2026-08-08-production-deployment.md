@@ -167,13 +167,13 @@ In `.env.example`, add a new var near `DATABASE_URL` and update checklist item 1
 
 Replace:
 ```
-#   1. DATABASE_URL: ganti password Postgres dev ("pelletq_dev_password")
+#   1. DATABASE_URL: ganti password Postgres dev ("ganti-dengan-password-kuat")
 #      dengan kredensial baru — update juga POSTGRES_PASSWORD di
 #      docker-compose.yml.
 ```
 with:
 ```
-#   1. POSTGRES_PASSWORD: ganti dari default "pelletq_dev_password" di .env
+#   1. POSTGRES_PASSWORD: ganti dari default "ganti-dengan-password-kuat" di .env
 #      ini SAJA — docker-compose.yml membaca variabel ini, jangan diedit
 #      langsung di docker-compose.yml. DATABASE_URL di bawah ini juga harus
 #      diupdate agar password-nya cocok.
@@ -181,7 +181,7 @@ with:
 
 Add a new line right after the `# Database` heading:
 ```
-POSTGRES_PASSWORD="pelletq_dev_password"
+POSTGRES_PASSWORD="ganti-dengan-password-kuat"
 ```
 (placed above the existing `DATABASE_URL=` line)
 
@@ -191,14 +191,14 @@ In the `postgres` service, change:
 ```yaml
     environment:
       POSTGRES_USER: pelletq
-      POSTGRES_PASSWORD: pelletq_dev_password
+      POSTGRES_PASSWORD: ganti-dengan-password-kuat
       POSTGRES_DB: pelletq
 ```
 to:
 ```yaml
     environment:
       POSTGRES_USER: pelletq
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pelletq_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ganti-dengan-password-kuat}
       POSTGRES_DB: pelletq
 ```
 
@@ -226,7 +226,7 @@ Append to `docker-compose.yml`, after the `adminer` service:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-ganti-dengan-password-kuat}@postgres:5432/pelletq?schema=public
       MQTT_BROKER_URL: mqtt://mosquitto:1883
     depends_on:
       postgres:
@@ -238,7 +238,7 @@ Append to `docker-compose.yml`, after the `adminer` service:
       target: build
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-pelletq_dev_password}@postgres:5432/pelletq?schema=public
+      DATABASE_URL: postgresql://pelletq:${POSTGRES_PASSWORD:-ganti-dengan-password-kuat}@postgres:5432/pelletq?schema=public
     depends_on:
       postgres:
         condition: service_healthy
@@ -619,9 +619,9 @@ Menjalankan `git pull`, build ulang image `app`, `docker compose up -d`, dan
 
 ### Checklist keamanan
 
-- [ ] `SEED_ADMIN_PASSWORD` diganti dari default `admin321`.
+- [ ] `SEED_ADMIN_PASSWORD` diganti dari default `<password-dev-lama>`.
 - [ ] `AUTH_SECRET` baru & rahasia (tidak sama dengan dev, tidak di-commit).
-- [ ] `POSTGRES_PASSWORD` diganti dari default `pelletq_dev_password`.
+- [ ] `POSTGRES_PASSWORD` diganti dari default `ganti-dengan-password-kuat`.
 - [ ] `MQTT_USERNAME`/`MQTT_PASSWORD` diganti dari kredensial dev.
 - [ ] DNS `APP_DOMAIN`/`MQTT_DOMAIN` sudah mengarah ke server sebelum
       `docker compose up -d` (Caddy butuh ini untuk issue sertifikat).
