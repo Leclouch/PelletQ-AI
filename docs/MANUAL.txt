@@ -1,0 +1,603 @@
+================================================================================
+                     MANUAL PENGGUNAAN PELLETQ-AI
+             Sistem Formulasi Pakan Lele Otomatis Berbasis SNI
+                            PKM-PI UGM
+================================================================================
+
+Panduan pemakaian aplikasi PelletQ-AI untuk pengguna (mitra pembudidaya dan
+operator mesin pelet). Semua gambar pendukung diambil dari tampilan HP, karena
+aplikasi dirancang untuk dipakai dari layar ponsel di lokasi produksi.
+
+Standar acuan : SNI 01-4087-2006 (pakan buatan untuk ikan lele)
+Gambar         : tersimpan di folder docs/manual/img/
+Dokumen lain   : cara memasang dan menjalankan server ada di README.md dan
+                 docs/DEPLOYMENT.md
+
+
+DAFTAR ISI
+--------------------------------------------------------------------------------
+  1. Sekilas tentang PelletQ-AI
+  2. Persiapan
+  3. Masuk ke aplikasi
+  4. Mengenal layar Beranda
+  5. Menyiapkan bahan baku (Kelola Bahan)
+  6. Membuat formulasi (3 langkah)
+  7. Membaca layar Hasil
+  8. Mengirim resep ke mesin
+  9. Mengelola riwayat formulasi
+ 10. Bantuan dan Keluar
+ 11. Pesan kesalahan dan solusinya
+ 12. Lampiran
+     A. Acuan SNI per fase
+     B. Arti parameter mesin
+     C. Catatan satuan
+     D. Alur singkat sekali produksi
+ 13. Daftar gambar
+
+
+================================================================================
+1. SEKILAS TENTANG PELLETQ-AI
+================================================================================
+
+PelletQ-AI menghitung resep pakan lele termurah yang tetap memenuhi SNI dari
+bahan baku yang benar-benar Anda punya, lalu menurunkannya menjadi parameter
+mesin pelet (suhu pemanas, kecepatan extruder, kecepatan pisau, lama mixing,
+air tambahan) dan mengirimkannya ke mesin.
+
+Alur kerjanya:
+
+    Input di HP
+        -> Optimasi komposisi (LP solver)
+        -> Parameter mesin (rule-based)
+        -> Validasi SNI
+        -> Tampil di layar Hasil dan dikirim ke mesin (ESP32)
+
+Yang perlu Anda lakukan hanya tiga hal: mengisi data ikan, memilih bahan baku
+beserta stok dan harganya, lalu menekan tombol Hitung Formulasi. Sisanya
+dikerjakan sistem.
+
+
+================================================================================
+2. PERSIAPAN
+================================================================================
+
+Sebelum memakai aplikasi, pastikan hal berikut sudah siap.
+
+  HP dan browser
+      Chrome, Edge, atau Safari versi terbaru. Aplikasi dibuka lewat browser,
+      tidak perlu install apa pun.
+
+  Alamat aplikasi
+      Diberikan oleh admin, misalnya https://app.contoh-domain.com. Saat
+      pengembangan lokal alamatnya http://localhost:3000.
+
+  Akun
+      Username dan password diberikan oleh admin. Tidak ada pendaftaran
+      mandiri di aplikasi.
+
+  Mesin pelet (opsional)
+      Hanya diperlukan saat resep akan dikirim otomatis ke mesin. Tanpa mesin,
+      aplikasi tetap bisa dipakai untuk menghitung resep dan menjalankannya
+      secara manual.
+
+  Data bahan
+      Siapkan catatan stok dan harga beli terbaru tiap bahan. Semakin akurat
+      datanya, semakin akurat pula hitungan biayanya.
+
+
+================================================================================
+3. MASUK KE APLIKASI
+================================================================================
+
+Gambar 1 - Halaman masuk: docs/manual/img/01-login.png
+
+Buka alamat aplikasi di browser HP. Halaman pertama yang muncul adalah halaman
+masuk.
+
+Langkah:
+
+  1. Isi kolom Username.
+  2. Isi kolom Password. Ketuk ikon mata di ujung kanan kolom bila ingin
+     memastikan ketikan sudah benar.
+  3. Ketuk tombol Masuk.
+
+Catatan:
+
+  - Bila username atau password salah, muncul peringatan merah "Username atau
+    password salah." di dalam kartu login.
+  - Demi keamanan, percobaan masuk dibatasi 5 kali per menit dari satu
+    jaringan. Bila terkena batas, muncul pesan "Terlalu banyak percobaan
+    login. Coba lagi nanti." Tunggu sekitar satu menit, lalu coba lagi.
+  - Semua halaman selain halaman masuk hanya bisa dibuka setelah login.
+
+
+================================================================================
+4. MENGENAL LAYAR BERANDA
+================================================================================
+
+Gambar 2 - Beranda saat masih kosong: docs/manual/img/02-beranda-kosong.png
+Gambar 3 - Beranda setelah ada formulasi: docs/manual/img/02-beranda.png
+Gambar 4 - Daftar riwayat di Beranda: docs/manual/img/02b-beranda-riwayat.png
+
+Setelah berhasil masuk, Anda tiba di Beranda. Saat pertama kali dipakai,
+riwayat masih kosong (Gambar 2). Setelah ada formulasi yang dibuat, Beranda
+menampilkan ringkasan dan daftar riwayat (Gambar 3).
+
+Bagian-bagian layar Beranda:
+
+  Badge status mesin (kanan atas)
+      "Sistem Aktif" berwarna biru berarti mesin pelet terhubung.
+      "Mesin Offline" berwarna merah berarti mesin tidak terhubung.
+      Status dicek ulang otomatis setiap 5 detik.
+
+  Formulasi dibuat
+      Jumlah resep yang tersimpan di HP ini.
+
+  Terakhir
+      Nama dan tanggal formulasi terbaru.
+
+  Total Hemat vs Harga Pasar
+      Akumulasi selisih biaya produksi sendiri dibandingkan harga pakan
+      pabrikan, dihitung dari seluruh riwayat.
+
+  Buat Formulasi Baru
+      Tombol utama untuk mulai menghitung resep.
+
+  Kelola Bahan
+      Membuka daftar bahan baku beserta stok dan harga Anda.
+
+  Riwayat Formulasi
+      Daftar resep yang pernah dibuat. Gulir ke bawah untuk melihatnya
+      (Gambar 4). Tiap baris memperlihatkan nama resep, kadar protein (P) dan
+      lemak (L), jumlah bahan, tanggal, fase, target produksi, status SNI,
+      serta biaya per kg.
+
+Menu bawah (selalu tampil di bagian bawah layar):
+
+  Beranda    Kembali ke layar Beranda.
+  Bahan      Membuka layar Kelola Bahan.
+  Tambah     Tombol biru bulat bertanda tambah, untuk membuat formulasi baru.
+  Bantuan    Ringkasan cara pakai dan penjelasan validasi SNI.
+  Keluar     Keluar dari akun, dengan konfirmasi terlebih dahulu.
+
+PENTING
+    Riwayat formulasi disimpan di browser HP yang Anda pakai, bukan di server.
+    Bila Anda berganti HP, berganti browser, atau menghapus data browser,
+    riwayat tidak ikut berpindah. Data bahan baku dan ketersediaan tersimpan
+    di server, jadi tetap ada di perangkat mana pun.
+
+
+================================================================================
+5. MENYIAPKAN BAHAN BAKU (KELOLA BAHAN)
+================================================================================
+
+Gambar 5 - Layar Kelola Bahan: docs/manual/img/08-kelola-bahan.png
+Gambar 6 - Mengatur stok dan harga: docs/manual/img/08b-atur-ketersediaan.png
+Gambar 7 - Form tambah bahan baru: docs/manual/img/08c-tambah-bahan.png
+
+Ketuk Bahan di menu bawah, atau Kelola Bahan di Beranda (Gambar 5).
+
+Setiap bahan ditampilkan dalam satu kartu yang terbagi dua bagian:
+
+  1. Data bahan (katalog)
+     Nama, karakter bahan (Netral, Mudah Mengikat, Sulit Mengikat, atau
+     Berminyak), kandungan protein (P), lemak (L), serat, serta harga standar.
+     Ini data acuan yang dipakai bersama.
+
+  2. Ketersediaan saya
+     Stok dan harga beli milik Anda sendiri. Bagian inilah yang dipakai sistem
+     saat menghitung formulasi, dan yang otomatis mengisi form saat membuat
+     formulasi baru.
+
+5.1 Mengisi stok dan harga (paling sering dipakai)
+
+  1. Ketuk tombol Atur (atau Edit bila sudah pernah diisi) pada bahan yang
+     dimaksud.
+  2. Isi kolom Stok dan Harga (Gambar 6).
+  3. Ketuk Simpan Ketersediaan.
+
+  Tombol Hapus di baris "Ketersediaan saya" hanya menghapus stok dan harga
+  Anda, bukan menghapus bahannya dari katalog.
+
+5.2 Menambah bahan baru
+
+  Ketuk tombol tambah berwarna biru di kanan atas layar, lalu isi nama bahan,
+  kandungan nutrisinya (protein, lemak, serat kasar, abu, kadar air), harga
+  standar, dan karakter bahan. Ketuk Simpan Bahan (Gambar 7).
+
+  Isi kandungan nutrisi sebaik mungkin. Angka inilah yang dipakai sistem untuk
+  menyeimbangkan protein, lemak, serat, abu, dan kadar air terhadap SNI. Bahan
+  dengan data nutrisi asal-asalan akan menghasilkan resep yang salah.
+
+5.3 Mengubah dan menghapus bahan katalog
+
+  Ikon pensil pada kartu bahan dipakai untuk mengubah data katalog bahan
+  tersebut.
+
+  Ikon tempat sampah dipakai untuk menghapus bahan. Bila bahan itu sudah
+  pernah dipakai di formulasi lama, bahan tidak benar-benar dihapus melainkan
+  disembunyikan (muncul pesan "Bahan disembunyikan (masih dipakai di riwayat
+  formulasi lama)"), supaya riwayat lama tetap utuh.
+
+5.4 Satuan khusus Minyak Ikan
+
+  Khusus Minyak Ikan, stok dan harga ditampilkan dan diisi dalam ml dan Rp/ml,
+  bukan kg, karena minyak lebih lazim ditakar dengan gelas ukur. Konversi ke kg
+  dilakukan otomatis oleh sistem memakai densitas 0,92 kg per liter. Bahan lain
+  tetap memakai kg dan Rp/kg.
+
+
+================================================================================
+6. MEMBUAT FORMULASI (3 LANGKAH)
+================================================================================
+
+Gambar 8  - Langkah 1, data ikan: docs/manual/img/03-form-langkah1.png
+Gambar 9  - Langkah 2, bahan baku: docs/manual/img/04-form-langkah2.png
+Gambar 10 - Langkah 2, bagian bawah: docs/manual/img/04b-form-langkah2-bawah.png
+Gambar 11 - Langkah 3, ringkasan: docs/manual/img/05-form-langkah3.png
+Gambar 12 - Proses perhitungan: docs/manual/img/06-menghitung.png
+
+Ketuk Buat Formulasi Baru di Beranda, atau tombol Tambah di menu bawah. Proses
+terbagi menjadi tiga langkah; indikator garis biru di bawah judul menunjukkan
+posisi Anda.
+
+6.1 Langkah 1 - Data Ikan (Gambar 8)
+
+  Jenis Ikan
+      Saat ini hanya tersedia Lele Dumbo.
+
+  Fase Budidaya
+      Benih, Grower, Finisher, atau Induk. Pilihan ini menentukan target
+      nutrisi SNI sekaligus diameter pelet (lihat Lampiran A). Diameter tidak
+      perlu dipilih sendiri.
+
+  Umur Ikan
+      Umur dalam satuan hari.
+
+  Jumlah Ikan
+      Perkiraan jumlah ikan dalam kolam, dalam satuan ekor.
+
+  Bobot Rata-rata
+      Opsional, dalam satuan gram.
+
+  Ketuk Lanjut untuk meneruskan. Tombol Batal membatalkan dan kembali ke
+  Beranda.
+
+6.2 Langkah 2 - Bahan Baku (Gambar 9 dan Gambar 10)
+
+  Bahan yang sudah punya "Ketersediaan saya" di layar Kelola Bahan otomatis
+  terisi di sini beserta stok dan harganya.
+
+  Untuk tiap baris bahan:
+      - Ketuk nama bahan (bertuliskan "Pilih bahan...") untuk memilih bahan
+        dari daftar.
+      - Ketuk tombol panah bawah di kanan untuk membuka atau menutup kolom
+        stok dan harga.
+      - Ketuk tombol strip untuk menghapus baris tersebut.
+      - Tombol Tambah Bahan di bawah daftar menambah baris baru.
+
+  Aturan yang berlaku:
+
+      Minimal 3 bahan, maksimal 8 bahan.
+          Tombol Lanjut menolak melanjutkan bila bahan kurang dari tiga.
+
+      Minyak Ikan dan Tapioka wajib ada.
+          Minyak ikan sebagai sumber lemak, tapioka sebagai pengikat agar
+          pelet tidak mudah hancur di air.
+
+      Kolom Stok boleh dikosongkan.
+          Bila kosong, sistem menganggap stok bahan itu tidak membatasi
+          hitungan. Isilah bila stok Anda memang terbatas, karena sistem tidak
+          akan memakai bahan melebihi stok yang Anda tulis.
+
+      Kolom Harga boleh dikosongkan.
+          Bila kosong, dipakai harga standar dari katalog bahan.
+
+  Ketuk Lanjut untuk meneruskan.
+
+6.3 Langkah 3 - Ringkasan dan target produksi (Gambar 11)
+
+  Isi Target Produksi Total dalam kg, yaitu berapa banyak pakan yang ingin
+  dibuat sekali jalan. Di bawah kolom itu sistem menjelaskan pembagian batch:
+  mesin memproses 5 kg per batch, sehingga target 25 kg berarti 5 batch kali
+  5 kg.
+
+  Kotak Ringkasan menampilkan sekali lagi jenis ikan dan fase, target produksi,
+  pembagian batch, dan jumlah bahan yang dipilih. Periksa sebentar, lalu ketuk
+  Hitung Formulasi.
+
+  Selama perhitungan berjalan, layar tertutup tampilan tunggu (Gambar 12).
+  Prosesnya biasanya beberapa detik, bisa sedikit lebih lama bila penjelasan AI
+  diaktifkan.
+
+
+================================================================================
+7. MEMBACA LAYAR HASIL
+================================================================================
+
+Gambar 13 - Status SNI, penjelasan AI, komposisi: docs/manual/img/07-hasil-1.png
+Gambar 14 - Resep per batch dan biaya: docs/manual/img/07b-hasil-2.png
+Gambar 15 - Parameter mesin dan validasi SNI: docs/manual/img/07c-hasil-3.png
+Gambar 16 - Langkah produksi: docs/manual/img/07d-hasil-4.png
+
+Setelah perhitungan selesai, layar Hasil terbuka otomatis dan resepnya langsung
+tersimpan ke Riwayat.
+
+7.1 Status mutu, penjelasan AI, dan komposisi bahan (Gambar 13)
+
+  Status Mutu
+      Tanda centang hijau dengan tulisan "Sesuai SNI" berarti seluruh parameter
+      mutu lolos. Tanda seru kuning dengan tulisan "Belum Sesuai SNI" berarti
+      ada parameter di luar batas; periksa bagian Validasi SNI dan peringatan
+      di bawahnya.
+
+  Penjelasan AI
+      Ringkasan berbahasa manusia mengenai komposisi yang dipilih dan
+      alasannya. Bagian ini hanya muncul bila layanan penjelasan aktif;
+      ketiadaannya tidak memengaruhi keabsahan hitungan.
+
+  Komposisi Bahan
+      Jumlah tiap bahan untuk total produksi, lengkap dengan persentase dan
+      biayanya, ditutup baris Total Produksi.
+
+7.2 Resep per batch dan biaya (Gambar 14)
+
+  Resep per Batch (5 kg)
+      Takaran tiap bahan untuk sekali proses mesin, disertai instruksi
+      pengulangan, misalnya "Ulangi 5x (masing-masing 5 kg)". Inilah angka yang
+      dipakai saat menimbang bahan di lapangan.
+
+  Biaya per kg
+      Biaya produksi pakan per kilogram.
+
+  Hemat vs pasar
+      Selisih biaya tersebut terhadap harga pakan pabrikan untuk fase yang
+      sama.
+
+7.3 Parameter mesin dan validasi SNI (Gambar 15)
+
+  Parameter Mesin
+      Suhu heater, kecepatan extruder, kecepatan pisau, waktu mixing, air
+      tambahan, dan target kadar air adonan. Penjelasan tiap parameter ada di
+      Lampiran B.
+
+  Validasi SNI
+      Nilai hitungan tiap parameter mutu berikut batas SNI-nya. Tanda centang
+      biru berarti memenuhi, tanda silang merah berarti di luar batas.
+
+  Peringatan
+      Kotak saran berwarna. Biru atau abu-abu bersifat informasi, kuning perlu
+      diperhatikan, merah harus ditangani sebelum pakan dipakai atau disimpan.
+
+7.4 Langkah produksi (Gambar 16)
+
+  Urutan kerja produksi dari menimbang bahan sampai penyimpanan, sudah terisi
+  angka sesuai hasil hitungan (jumlah air, lama mixing, suhu, RPM, dan diameter
+  target). Bagian ini bisa dijadikan panduan kerja operator di lapangan.
+
+
+================================================================================
+8. MENGIRIM RESEP KE MESIN
+================================================================================
+
+Di bagian bawah layar Hasil ada dua tombol tetap: Beranda dan Kirim ke Mesin.
+
+  1. Pastikan badge di Beranda menunjukkan "Sistem Aktif", artinya mesin
+     terhubung.
+  2. Ketuk Kirim ke Mesin.
+  3. Perhatikan perubahan teks tombol:
+         "Mengirim..."              sedang diproses.
+         "Terkirim ke Mesin"        resep berhasil dikirim.
+         "Gagal, coba lagi"         pengiriman gagal; periksa koneksi internet
+                                    dan status mesin, lalu ketuk sekali lagi.
+
+Yang dikirim adalah daftar nama bahan beserta jumlah kilogramnya (jumlah untuk
+total formulasi). Data itu tampil di layar mesin (TFT) sebagai acuan
+penimbangan operator.
+
+Hal yang perlu diketahui:
+
+  - Resep sudah otomatis terkirim sekali saat formulasi pertama kali dihitung.
+    Tombol Kirim ke Mesin dipakai untuk mengirim ulang, misalnya setelah mesin
+    dinyalakan ulang atau saat membuka resep lama dari Riwayat.
+  - Pengiriman bersifat retained, artinya mesin yang baru menyala tetap
+    menerima resep terakhir tanpa perlu dikirim ulang.
+  - Aplikasi tidak mengirim perintah start atau stop. Gerbang hopper dan
+    pemanas mesin bekerja otomatis begitu mesin dinyalakan; aplikasi hanya
+    menyuplai data resep dan parameter.
+  - Bila mesin sedang offline, resep tetap bisa dijalankan manual dengan
+    mengikuti Resep per Batch dan Langkah Produksi di layar Hasil.
+
+
+================================================================================
+9. MENGELOLA RIWAYAT FORMULASI
+================================================================================
+
+Di daftar Riwayat Formulasi pada Beranda, tiap baris punya tiga aksi.
+
+  Membuka detail
+      Ketuk badan baris. Layar Hasil terbuka lagi lengkap, termasuk tombol
+      Kirim ke Mesin.
+
+  Mengubah nama
+      Ketuk ikon pensil, ketik nama baru, lalu ketuk Simpan atau tekan Enter.
+      Nama membantu membedakan resep, misalnya "Grower kolam 2 Agustus".
+
+  Menghapus
+      Ketuk ikon tempat sampah, lalu konfirmasi dengan "Ya, hapus".
+      Penghapusan tidak bisa dibatalkan.
+
+
+================================================================================
+10. BANTUAN DAN KELUAR
+================================================================================
+
+Gambar 17 - Layar Bantuan: docs/manual/img/09-bantuan.png
+Gambar 18 - Konfirmasi keluar: docs/manual/img/10-konfirmasi-keluar.png
+
+Layar Bantuan berisi keterangan singkat tentang aplikasi, penjelasan validasi
+SNI, dan ringkasan cara pakai dalam empat langkah (Gambar 17). Untuk keluar
+dari layar Bantuan, ketuk tanda panah kiri di pojok kiri atas.
+
+Keluar dari akun dilakukan lewat tombol Keluar di menu bawah. Akan muncul
+konfirmasi terlebih dahulu (Gambar 18).
+
+
+================================================================================
+11. PESAN KESALAHAN DAN SOLUSINYA
+================================================================================
+
+  "Username atau password salah."
+      Penyebab : kredensial keliru.
+      Solusi   : periksa ketikan, ketuk ikon mata untuk melihat password.
+                 Minta admin bila lupa.
+
+  "Terlalu banyak percobaan login. Coba lagi nanti."
+      Penyebab : lebih dari 5 percobaan login dalam satu menit.
+      Solusi   : tunggu sekitar satu menit.
+
+  "Minimal 3 bahan baku harus dipilih."
+      Penyebab : bahan yang dipilih kurang dari tiga.
+      Solusi   : tambahkan bahan di Langkah 2.
+
+  "Bahan wajib belum dipilih: ..."
+      Penyebab : Minyak Ikan dan/atau Tapioka belum ada di daftar bahan.
+      Solusi   : tambahkan bahan yang disebut pada pesan.
+
+  "Formulasi belum memenuhi standar SNI." beserta daftar saran
+      Penyebab : dengan bahan dan stok yang ada, tidak ada komposisi yang
+                 memenuhi seluruh batas SNI.
+      Solusi   : ikuti saran yang ditampilkan. Umumnya menambah bahan
+                 berprotein tinggi, menambah tapioka, atau melonggarkan batas
+                 stok.
+
+  "Standar SNI tidak ditemukan untuk kombinasi spesies dan fase ini."
+      Penyebab : data acuan SNI untuk fase tersebut belum ada di database.
+      Solusi   : hubungi admin untuk melengkapi data acuan.
+
+  "Gagal terhubung ke server. Pastikan database aktif."
+      Penyebab : aplikasi tidak dapat menghubungi server.
+      Solusi   : periksa koneksi internet. Bila tetap gagal, hubungi admin.
+
+  "Terlalu banyak permintaan. Coba lagi nanti."
+      Penyebab : terlalu banyak penyimpanan atau perubahan data dalam satu
+                 menit (batas 30 kali).
+      Solusi   : tunggu sebentar, lalu ulangi.
+
+  "Gagal mengirim formulasi ke mesin." atau tombol "Gagal, coba lagi"
+      Penyebab : mesin atau broker MQTT tidak aktif.
+      Solusi   : pastikan mesin menyala dan terhubung internet; badge di
+                 Beranda harus menunjukkan "Sistem Aktif". Sementara itu resep
+                 tetap bisa dijalankan manual.
+
+  Badge "Mesin Offline" terus-menerus
+      Penyebab : ESP32 mati, tidak mendapat WiFi, atau broker tidak aktif.
+      Solusi   : periksa daya dan jaringan mesin. Hubungi teknisi bila tetap
+                 offline.
+
+  "Bahan disembunyikan (masih dipakai di riwayat formulasi lama)."
+      Penyebab : bahan yang dihapus masih dirujuk oleh formulasi lama.
+      Solusi   : ini normal. Bahan hilang dari daftar pilihan, sementara
+                 riwayat lama tetap utuh.
+
+
+================================================================================
+12. LAMPIRAN
+================================================================================
+
+LAMPIRAN A - ACUAN SNI PER FASE
+--------------------------------------------------------------------------------
+
+Nilai yang dipakai sistem untuk Lele Dumbo (SNI 01-4087-2006). Angka dalam
+kurung pada kolom diameter adalah diameter yang dipakai sistem untuk fase
+tersebut, ditentukan otomatis dan tidak perlu dipilih pengguna.
+
+  Fase       Protein  Lemak   Serat   Abu     Kadar air  Diameter        Apung
+             min      min     maks    maks    maks       pelet           min
+  ---------------------------------------------------------------------------
+  Benih      30%      5%      6%      13%     12%        < 2 mm (1,5)    80%
+  Grower     28%      5%      8%      13%     12%        2-3 mm (2,5)    80%
+  Finisher   25%      5%      8%      13%     12%        3-4 mm (3,5)    80%
+  Induk      30%      5%      8%      13%     12%        >= 4 mm (4,5)   80%
+
+
+LAMPIRAN B - ARTI PARAMETER MESIN
+--------------------------------------------------------------------------------
+
+  Suhu Heater
+      Suhu pemanas di antara mixer dan extruder.
+      Dipengaruhi jenis pelet (terapung atau tenggelam) dan kelembapan bahan.
+
+  Extruder (RPM)
+      Kecepatan ulir pendorong adonan.
+      Dipengaruhi kondisi bahan; bahan lebih basah diproses lebih lambat.
+
+  Pisau Pemotong (RPM)
+      Kecepatan pisau pemotong pelet.
+      Dipengaruhi diameter pelet (dari fase) dan panjang pelet yang diinginkan.
+
+  Waktu Mixing
+      Lama pengadukan agar adonan homogen.
+      Dipengaruhi kehalusan dan kekeringan bahan.
+
+  Air Tambahan
+      Perkiraan air yang perlu ditambahkan saat mixing.
+      Dipengaruhi selisih kadar air bahan terhadap target kadar air adonan.
+
+  Target Kadar Air Adonan
+      Kadar air adonan yang dituju sebelum extrusi, umumnya 25 persen.
+
+
+LAMPIRAN C - CATATAN SATUAN
+--------------------------------------------------------------------------------
+
+  - Semua bahan memakai kg dan Rp/kg, kecuali Minyak Ikan yang ditampilkan
+    dalam ml dan Rp/ml. Konversi memakai densitas 0,92 kg per liter.
+  - Ukuran batch mesin tetap 5 kg. Target produksi berapa pun akan dipecah
+    menjadi batch 5 kg, ditambah satu batch sisa bila tidak habis dibagi.
+  - Harga pasar acuan untuk menghitung penghematan: Benih Rp 14.000, Grower
+    Rp 12.500, Finisher Rp 11.000, Induk Rp 11.500 per kg.
+
+
+LAMPIRAN D - ALUR SINGKAT SEKALI PRODUKSI
+--------------------------------------------------------------------------------
+
+  1. Kelola Bahan   : perbarui stok dan harga bahan hari ini.
+  2. Tambah         : Langkah 1, isi fase, umur, dan jumlah ikan.
+  3.                  Langkah 2, pilih bahan (minimal 3, wajib ada Minyak Ikan
+                      dan Tapioka).
+  4.                  Langkah 3, isi target produksi dalam kg, lalu ketuk
+                      Hitung Formulasi.
+  5. Layar Hasil    : periksa Status Mutu, catat Resep per Batch.
+  6. Kirim ke Mesin : bila mesin online, lalu jalankan mesin.
+  7. Produksi       : ikuti Langkah Produksi, keringkan pelet sampai kadar air
+                      maksimal 12 persen.
+
+
+================================================================================
+13. DAFTAR GAMBAR
+================================================================================
+
+  Gambar 1   Halaman masuk                  docs/manual/img/01-login.png
+  Gambar 2   Beranda saat masih kosong      docs/manual/img/02-beranda-kosong.png
+  Gambar 3   Beranda setelah ada formulasi  docs/manual/img/02-beranda.png
+  Gambar 4   Daftar riwayat di Beranda      docs/manual/img/02b-beranda-riwayat.png
+  Gambar 5   Layar Kelola Bahan             docs/manual/img/08-kelola-bahan.png
+  Gambar 6   Mengatur stok dan harga        docs/manual/img/08b-atur-ketersediaan.png
+  Gambar 7   Form tambah bahan baru         docs/manual/img/08c-tambah-bahan.png
+  Gambar 8   Langkah 1, data ikan           docs/manual/img/03-form-langkah1.png
+  Gambar 9   Langkah 2, bahan baku          docs/manual/img/04-form-langkah2.png
+  Gambar 10  Langkah 2, bagian bawah        docs/manual/img/04b-form-langkah2-bawah.png
+  Gambar 11  Langkah 3, ringkasan           docs/manual/img/05-form-langkah3.png
+  Gambar 12  Proses perhitungan             docs/manual/img/06-menghitung.png
+  Gambar 13  Hasil, status dan komposisi    docs/manual/img/07-hasil-1.png
+  Gambar 14  Hasil, resep batch dan biaya   docs/manual/img/07b-hasil-2.png
+  Gambar 15  Hasil, parameter dan validasi  docs/manual/img/07c-hasil-3.png
+  Gambar 16  Hasil, langkah produksi        docs/manual/img/07d-hasil-4.png
+  Gambar 17  Layar Bantuan                  docs/manual/img/09-bantuan.png
+  Gambar 18  Konfirmasi keluar              docs/manual/img/10-konfirmasi-keluar.png
+
+
+================================================================================
+PelletQ-AI - PKM-PI UGM
+================================================================================
